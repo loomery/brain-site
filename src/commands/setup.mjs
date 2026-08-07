@@ -101,14 +101,45 @@ function mergeCopy(src, dest, { skippedForLog, reserved = null, root = dest }) {
   }
 }
 
+// A real consumer's siteDir/package.json exists before the clone ever runs (it's what
+// `npm i @loomery/brain-site` needs), so it can't just be left alone the way the other
+// reserved top-level files are — it also carries Quartz's own `bin` (the `quartz`
+// executable `npx quartz ...` resolves) and the dependencies Quartz needs to build.
+// Merge those in, letting the site's own fields win on conflict, then hand back a
+// package.json that has both.
+function mergePackageJson(siteDir, quartzPkgPath) {
+  if (!fs.existsSync(quartzPkgPath)) return
+
+  const quartzPkg = JSON.parse(fs.readFileSync(quartzPkgPath, "utf8"))
+  const sitePkgPath = path.join(siteDir, "package.json")
+  const sitePkg = fs.existsSync(sitePkgPath)
+    ? JSON.parse(fs.readFileSync(sitePkgPath, "utf8"))
+    : {}
+
+  const merged = {
+    ...quartzPkg,
+    ...sitePkg,
+    dependencies: { ...quartzPkg.dependencies, ...sitePkg.dependencies },
+    devDependencies: { ...quartzPkg.devDependencies, ...sitePkg.devDependencies },
+    bin: { ...quartzPkg.bin, ...sitePkg.bin },
+    scripts: { ...quartzPkg.scripts, ...sitePkg.scripts },
+  }
+
+  fs.writeFileSync(sitePkgPath, JSON.stringify(merged, null, 2) + "\n")
+}
+
 function vendorQuartz(siteDir) {
-  // NOT siteDir/quartz/ itself — see copyPackageAssets, which always lands
-  // quartz/styles/*.scss and quartz/static/fonts/*.otf there, clone or no clone.
-  // siteDir/package.json is unambiguous: it only ever exists after a real vendor
-  // (this function never creates it), and it's also the literal file `npm i` needs.
-  const vendoredMarker = path.join(siteDir, "package.json")
+  // NOT siteDir/package.json: a real consumer's siteDir already has a package.json
+  // before setup ever runs, because that's the file `npm i @loomery/brain-site`
+  // itself needs (see the consumer smoke test) — it is not evidence the Quartz clone
+  // happened. NOT siteDir/quartz/ itself either — see copyPackageAssets, which always
+  // lands quartz/styles/*.scss and quartz/static/fonts/*.otf there, clone or no clone.
+  // quartz/build.ts only ever comes from the upstream clone (this package's own
+  // assets never ship a file by that name), so its presence is unambiguous evidence
+  // the vendor step already ran.
+  const vendoredMarker = path.join(siteDir, "quartz", "build.ts")
   if (fs.existsSync(vendoredMarker)) {
-    log("package.json already present — skipping the clone.")
+    log("quartz/build.ts already present — skipping the clone.")
     return
   }
 
@@ -126,6 +157,14 @@ function vendorQuartz(siteDir) {
     if (fs.existsSync(upstreamConfig)) {
       fs.renameSync(upstreamConfig, path.join(tmpDir, "quartz.config.default.yaml"))
     }
+
+    // package.json needs a real merge (see mergePackageJson), not the generic
+    // exists-so-skip rule mergeCopy applies to every other leaf — so handle it here
+    // and remove it (and its lockfile, now stale) from the clone before the generic
+    // walk, so mergeCopy never sees or logs it.
+    mergePackageJson(siteDir, path.join(tmpDir, "package.json"))
+    fs.rmSync(path.join(tmpDir, "package.json"), { force: true })
+    fs.rmSync(path.join(tmpDir, "package-lock.json"), { force: true })
 
     log("Merging into the site directory (skipping this package's own files) ...")
     const skipped = []

@@ -5,7 +5,14 @@ import { runValidate } from "../src/commands/validate.mjs"
 
 function flag(argv, name, fallback) {
   const i = argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : argv[i + 1]
+  if (i === -1) return fallback
+  const value = argv[i + 1]
+  if (value === undefined || value.startsWith("--")) {
+    process.stderr.write(`brain-site: --${name} requires a value\n`)
+    process.stderr.write(`usage: brain-site <setup|build|serve|validate>\n`)
+    process.exit(1)
+  }
+  return value
 }
 
 const [command, ...argv] = process.argv.slice(2)

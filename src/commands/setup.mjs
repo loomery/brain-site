@@ -73,23 +73,27 @@ const RESERVED_TOP_LEVEL = new Set([
 // Skipping happens at the leaf (file) level instead: a file that already exists at the
 // destination is left alone (this package's or the brain's own version wins),
 // everything else is copied from the fresh clone. `reserved` is only ever passed on
-// the initial top-level call.
-function mergeCopy(src, dest, { skippedForLog, reserved = null }) {
+// the initial top-level call. `root` is the top-level site directory the skip log is
+// reported relative to — it defaults to `dest` on the initial (non-recursive) call and
+// is threaded through unchanged on every recursive call, so a collision several
+// directories deep still logs a path locatable from siteDir rather than just a
+// basename relative to whichever subdirectory the recursion happens to be in.
+function mergeCopy(src, dest, { skippedForLog, reserved = null, root = dest }) {
   const entries = fs.readdirSync(src, { withFileTypes: true })
   for (const entry of entries) {
     const to = path.join(dest, entry.name)
     if (reserved && reserved.has(entry.name)) {
-      skippedForLog.push(path.relative(dest, to))
+      skippedForLog.push(path.relative(root, to))
       continue
     }
     const from = path.join(src, entry.name)
     if (entry.isDirectory()) {
       fs.mkdirSync(to, { recursive: true })
-      mergeCopy(from, to, { skippedForLog })
+      mergeCopy(from, to, { skippedForLog, root })
       continue
     }
     if (fs.existsSync(to)) {
-      skippedForLog.push(path.relative(dest, to))
+      skippedForLog.push(path.relative(root, to))
       continue
     }
     fs.mkdirSync(path.dirname(to), { recursive: true })

@@ -37,3 +37,15 @@ test("validate fails on a doc missing audience, naming the slug", () => {
   assert.equal(code, 1)
   assert.match(stderr, /b: missing or malformed `audience`/)
 })
+
+test("--docs with no following value exits non-zero and names the flag", () => {
+  const { code, stderr } = run(["validate", "--docs"])
+  assert.notEqual(code, 0)
+  assert.match(stderr, /--docs/)
+})
+
+test("--docs followed by another flag exits non-zero and names the flag", () => {
+  const { code, stderr } = run(["validate", "--docs", "--foo"])
+  assert.notEqual(code, 0)
+  assert.match(stderr, /--docs/)
+})

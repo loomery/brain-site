@@ -120,7 +120,16 @@ function toSlug(filePath, docsRoot) {
 }
 
 export function runValidate({ docsRoot }) {
-  const files = walk(docsRoot)
+  let files
+  try {
+    files = walk(docsRoot)
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      console.error(`brain-site: docs directory not found: ${docsRoot}`)
+      return 1
+    }
+    throw err
+  }
   const docs = files.map((filePath) => ({
     slug: toSlug(filePath, docsRoot),
     frontmatter: parseFrontmatter(readFileSync(filePath, "utf8")),

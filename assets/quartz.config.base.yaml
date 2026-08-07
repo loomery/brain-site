@@ -1,0 +1,383 @@
+# yaml-language-server: $schema=./quartz/plugins/quartz-plugins.schema.json
+configuration:
+  pageTitle: Brain
+  pageTitleSuffix: ""
+  enableSPA: true
+  enablePopovers: true
+  analytics: null
+  locale: en-US
+  # Local only — no hosting, so no real baseUrl needed. Left as localhost so
+  # absolute-URL features (sitemap/RSS) don't leak the public quartz.jzhao.xyz
+  # default if ever generated. See "Browsing the brain as a website" in this repo's
+  # README.md/AGENTS.md before ever pointing this anywhere reachable.
+  baseUrl: localhost:8080
+  # `site/content` is a symlink to `../docs` (repo root's docs/), so Quartz's content
+  # root IS docs/ — src/, node_modules/, site/, logs/, skills/ and .git/ are siblings of
+  # docs/ and are structurally unreachable by the glob already; they're listed here
+  # anyway as defense-in-depth if the symlink strategy ever changes. The pattern that
+  # actually does work is `inbox/**`, since paths here are relative to the content root
+  # (docs/), not the repo root.
+  ignorePatterns:
+    - "src/**"
+    - "node_modules/**"
+    - "site/**"
+    - "logs/**"
+    - "skills/**"
+    - "docs/inbox/**"
+    - ".git/**"
+    - "inbox/**"
+  # Loomery design system: self-hosted brand fonts and colours. Fonts are self-hosted
+  # (fontOrigin: local — Quartz does no font loading of its own for this value;
+  # @font-face rules for "The Future" / "The Future Mono" live in
+  # quartz/styles/custom.scss, backed by the OTFs in quartz/static/fonts/). Colours are
+  # mapped from the Loomery design system's tokens: neutral ramp for light-mode
+  # surfaces/text, ink ramp for dark-mode surfaces/text, the DS indigo ramp for the
+  # light-mode accent/link slot (indigo-600/700 — mint itself is ~1.3:1 contrast on
+  # white and unreadable as text), and full brand mint for the dark-mode accent slot,
+  # where the near-black surface gives it >13:1 contrast.
+  #
+  # The client half of the co-branded page title ("Loomery × <client>", rendered by
+  # site/plugins/shared/brand-page-title.tsx) is derived from `pageTitle` above — to
+  # rebrand this site for a different client, change `pageTitle`; nothing else in this
+  # config or in brand-page-title.tsx needs to change. Known limitation: the derivation
+  # is a string heuristic (text before the first "-", after stripping a trailing
+  # " Brain") — it breaks on a hyphenated client name, e.g. "Marks-and-Spencer Brain"
+  # yields "Marks", not "Marks-and-Spencer". A project name with no hyphen (the common
+  # case) is unaffected. If this brain's project name has a hyphen for reasons other
+  # than the "<Client>-<Project>" convention brand-page-title.tsx assumes, check the
+  # rendered header rather than trusting it blindly.
+  theme:
+    fontOrigin: local
+    cdnCaching: false
+    typography:
+      header: "The Future"
+      body: "The Future"
+      code: "The Future Mono"
+    colors:
+      lightMode:
+        light: "#ffffff" # --background-page (light): white
+        lightgray: "#f5f5f5" # neutral-100 — --background-muted / card-adjacent wash
+        gray: "#a3a3a3" # neutral-400 — --foreground-muted (light)
+        darkgray: "#404040" # neutral-700 — body text, one step off --foreground-primary
+        dark: "#0a0a0a" # neutral-950 — --foreground-primary (light): headings
+        secondary: "#5b4ee9" # indigo-600 — brand secondary / --foreground-link (light), 5.66:1 on white
+        tertiary: "#4539c7" # indigo-700 — hover state, darker per DS motion convention, 7.89:1 on white
+        highlight: rgba(21, 255, 185, 0.14) # mint wash for nav/tag hover backgrounds — kept mint, see note above
+        textHighlight: rgba(21, 255, 185, 0.35) # mint wash for ==highlighted== text — kept mint, see note above
+      darkMode:
+        light: "#14141f" # loomery-ink-950 — --background-page (dark)
+        lightgray: "#181825" # loomery-ink-900 — --background-card (dark)
+        gray: "#545472" # loomery-ink-600 — --foreground-muted (dark)
+        darkgray: "#e6e6f5" # loomery-ink-100 — body text, one step off --foreground-primary
+        dark: "#f5f5fa" # loomery-ink-50 — --foreground-primary (dark): headings
+        secondary: "#15ffb9" # loomery-green-500 — full brand mint reads at ~14:1 on ink-950
+        tertiary: "#3fffc5" # loomery-green-400 — brighter hover state on dark surfaces
+        highlight: rgba(21, 255, 185, 0.16) # mint wash for nav/tag hover backgrounds
+        textHighlight: rgba(21, 255, 185, 0.3) # mint wash for ==highlighted== text
+plugins:
+  - source: "@quartz-community/created-modified-date"
+    enabled: true
+    options:
+      defaultDateType: modified
+      priority:
+        - frontmatter
+        - git
+        - filesystem
+    order: 10
+  - source: "@quartz-community/syntax-highlighting"
+    enabled: true
+    options:
+      theme:
+        light: github-light
+        dark: github-dark
+      keepBackground: false
+    order: 20
+  - source: "@quartz-community/obsidian-flavored-markdown"
+    enabled: true
+    options:
+      enableInHtmlEmbed: false
+      enableCheckbox: true
+      # Explicit: this is what renders Mermaid flowcharts (the onboarding graph). Must
+      # stay ordered AFTER syntax-highlighting (order 20 above) or diagrams render as raw
+      # code blocks instead of parsed Mermaid. `securityLevel: 'loose'` (required for
+      # clickable diagram nodes) is NOT a config option here — it is hardcoded inside
+      # this plugin's own bundled client script (mermaid.initialize({ securityLevel:
+      # "loose", ... }) in dist/index.js), so it is already in effect with no action
+      # needed from this config.
+      mermaid: true
+    order: 30
+  - source: "@quartz-community/github-flavored-markdown"
+    enabled: true
+    order: 40
+  - source: "@quartz-community/table-of-contents"
+    enabled: true
+    order: 50
+    layout:
+      position: right
+      priority: 30
+  - source: "@quartz-community/crawl-links"
+    enabled: true
+    options:
+      markdownLinkResolution: shortest
+    order: 60
+  - source: "@quartz-community/description"
+    enabled: true
+    order: 70
+  - source: "@quartz-community/latex"
+    enabled: true
+    options:
+      renderEngine: katex
+    order: 80
+  - source: "@quartz-community/citations"
+    enabled: false
+    order: 85
+  - source: "@quartz-community/hard-line-breaks"
+    enabled: false
+    order: 90
+  - source: "@quartz-community/ox-hugo"
+    enabled: false
+    order: 91
+  - source: "@quartz-community/roam"
+    enabled: false
+    order: 92
+  # --- Brain-specific plugins ---
+  # Emits /onboarding and /onboarding/<role>: a Mermaid flowchart of the role's
+  # reading path plus an ordered link list. Built from `roles`/`onboarding`
+  # frontmatter via brain-plugins/onboarding/paths.mjs. No `order` needed: it
+  # writes independent files and depends on no other emitter.
+  # Note: `quartz plugin install --from-config` reports "build failed" for this
+  # entry. Harmless — the installer tries npm install/build against local plugins
+  # as if they were packages, and a bare .ts file has no package.json. The symlink
+  # is still created and the plugin loads and runs.
+  - source: "./plugins/onboarding-emitter.ts"
+    enabled: true
+  # Emits /logs: every logs/*.md session entry on one scrollable page, newest
+  # first. logs/ is a sibling of the content root (docs/), not a descendant,
+  # so it's read directly off disk rather than through Quartz's content
+  # pipeline — see the file's own banner. Internal-only by convention; must
+  # not run for a client build if one is ever wired up.
+  - source: "./plugins/logs-timeline-emitter.ts"
+    enabled: true
+  # Fail-closed audience partition. Disabled while this site is internal-only and
+  # unhosted: with nothing published there is nothing to partition, and enabling it
+  # now only risks hiding pages. MUST be enabled, with a per-build `audience`, and
+  # paired with a CI validator, before anything is ever deployed anywhere reachable —
+  # see "Browsing the brain as a website" in README.md/AGENTS.md.
+  - source: "./plugins/audience-filter.ts"
+    enabled: false
+    options:
+      audience: internal
+  # Disabled as part of the Loomery font self-hosting work (see `theme:` block
+  # above). This plugin is a SEPARATE font-loading path from `theme:` — with no
+  # options it defaults to fontOrigin: googleFonts and its own stock fonts, so
+  # left enabled it would (a) inject its own Google Fonts <link>, re-introducing
+  # exactly the external font fetch this work removes, and (b) emit unlayered
+  # `h1..h6 { font-family: ... }` CSS that beats the base stylesheet's layered
+  # `var(--headerFont)` rule regardless of what `theme.typography.header` is
+  # set to, silently reverting headings to its own default. It exists to
+  # bridge Obsidian-theme font variables (useThemeFonts) — moot here since
+  # @quartz-themes/core (below) is also disabled and no Obsidian theme is in
+  # play — so disabling outright is simpler than keeping two font configs in
+  # sync.
+  - source: "@quartz-community/quartz-fonts"
+    enabled: false
+  - source: "@quartz-themes/core"
+    enabled: false
+    options:
+      theme: tokyo-night
+      mode: both
+  - source: "@quartz-community/remove-draft"
+    enabled: true
+  - source: "@quartz-community/explicit-publish"
+    enabled: false
+  - source: "@quartz-community/alias-redirects"
+    enabled: true
+  - source: "@quartz-community/content-index"
+    enabled: true
+    options:
+      enableSiteMap: true
+      enableRSS: true
+  - source: "@quartz-community/favicon"
+    enabled: true
+  # Disabled as fallout from the Loomery font work (theme.typography now names
+  # "The Future" / "The Future Mono" — self-hosted OTFs, not Google Fonts).
+  # This plugin renders social-preview images via satori, which needs actual
+  # font binary data, not a family name — it tries to fetch the theme's
+  # header/body fonts from Google Fonts to get that data, gets an HTTP 400
+  # (those names don't exist on Google Fonts), and its own fallback path hits
+  # an unrelated bug on that failure (`Cannot read properties of undefined
+  # (reading '288')`), hard-failing the whole build. Wiring local OTF data into
+  # its satori font list is possible (documented at quartz/util/og.tsx /
+  # getSatoriFonts — the plugin's own README shows the pattern) but is a
+  # framework-core edit, and this site is local-only/unhosted — a social-share
+  # preview image has no audience yet, so disabling rather than wiring it up.
+  # Re-enable and follow that doc if/when the site is ever actually hosted.
+  - source: "@quartz-community/og-image"
+    enabled: false
+  - source: "@quartz-community/cname"
+    enabled: true
+  - source: "@quartz-community/canvas-page"
+    enabled: true
+  - source: "@quartz-community/content-page"
+    enabled: true
+  - source: "@quartz-community/folder-page"
+    enabled: true
+  - source: "@quartz-community/tag-page"
+    enabled: true
+  - source: "@quartz-community/explorer"
+    enabled: true
+    layout:
+      position: left
+      priority: 50
+  - source: "@quartz-community/graph"
+    enabled: true
+    layout:
+      position: right
+      priority: 10
+  - source: "@quartz-community/search"
+    enabled: true
+    layout:
+      position: left
+      priority: 20
+      group: toolbar
+      groupOptions:
+        grow: true
+  - source: "@quartz-community/backlinks"
+    enabled: true
+    layout:
+      position: right
+      priority: 50
+  - source: "@quartz-community/article-title"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 10
+  - source: "@quartz-community/content-meta"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 20
+  - source: "@quartz-community/tag-list"
+    enabled: false
+    layout:
+      position: beforeBody
+      priority: 30
+  # Component swap, not the stock component — see site/quartz.ts, which registers
+  # site/plugins/shared/brand-page-title.tsx (LoomeryBrandTitle) against this exact
+  # source key before this plugin's own loader runs. Left `enabled: true` here (rather
+  # than disabled) because the source key itself must still match what quartz.ts
+  # registers against.
+  - source: "@quartz-community/page-title"
+    enabled: true
+    layout:
+      position: left
+      priority: 10
+  - source: "@quartz-community/darkmode"
+    enabled: true
+    layout:
+      position: left
+      priority: 30
+      group: toolbar
+  - source: "@quartz-community/reader-mode"
+    enabled: true
+    layout:
+      position: left
+      priority: 35
+      group: toolbar
+  - source: "@quartz-community/breadcrumbs"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 5
+      condition: not-index
+  - source: "@quartz-community/comments"
+    enabled: false
+    options:
+      provider: giscus
+      options: {}
+    layout:
+      position: afterBody
+      priority: 10
+  - source: "@quartz-community/footer"
+    enabled: true
+    options:
+      links:
+        GitHub: https://github.com/jackyzha0/quartz
+        Discord Community: https://discord.gg/cRFFHYye7t
+    layout:
+      position: footer
+      priority: 50
+  - source: "@quartz-community/recent-notes"
+    enabled: false
+  - source: "@quartz-community/spacer"
+    enabled: true
+    options: {}
+    order: 25
+    layout:
+      position: left
+      priority: 25
+      display: mobile-only
+  - source: "@quartz-community/bases-page"
+    enabled: true
+    options: {}
+    order: 50
+  - source: "@quartz-community/note-properties"
+    enabled: true
+    options:
+      includeAll: false
+      includedProperties:
+        - description
+        - tags
+        - aliases
+      excludedProperties: []
+      hidePropertiesView: false
+      delimiters: ---
+      language: yaml
+    order: 5
+    layout:
+      position: beforeBody
+      priority: 15
+      display: all
+  - source: "@quartz-community/unlisted-pages"
+    enabled: true
+    options: {}
+    order: 45
+  - source: "@quartz-community/encrypted-pages"
+    enabled: true
+    options:
+      iterations: 600000
+      passwordField: password
+      unlistWhenEncrypted: false
+      outputPath: static/encryptedContentIndex.json
+    order: 900
+  - source: "@quartz-community/stacked-pages"
+    enabled: false
+    layout:
+      position: afterBody
+      priority: 50
+      display: all
+layout:
+  groups:
+    toolbar:
+      priority: 35
+      direction: row
+      gap: 0.5rem
+  byPageType:
+    "404":
+      positions:
+        beforeBody: []
+        left: []
+        right: []
+    content: {}
+    folder:
+      exclude:
+        - reader-mode
+      positions:
+        right: []
+    tag:
+      exclude:
+        - reader-mode
+      positions:
+        right: []
+    canvas: {}
+    bases: {}

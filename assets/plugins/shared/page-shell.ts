@@ -39,7 +39,7 @@ export function escapeHtml(s: string): string {
 // classic (non-module) script re-executes its top-level code on every fresh
 // insertion. That is exactly how the Mermaid bundle's own `"nav"` listener
 // registration got silently duplicated and produced a double-render race
-// (site/plugins/onboarding-emitter.ts's fix commit has the full trace).
+// (.brain-site/plugins/onboarding-emitter.ts's fix commit has the full trace).
 function cssTag(resource: { content: string; inline?: boolean }): string {
   return resource.inline
     ? `<style data-persist="true">${resource.content}</style>`
@@ -291,7 +291,7 @@ ${afterDomJs}
 }
 
 // write() replicated (~5 lines) rather than imported — see the file banner:
-// site/quartz/plugins/emitters/helpers.ts cannot be imported from a local
+// .brain-site/quartz/plugins/emitters/helpers.ts cannot be imported from a local
 // plugin, since its own relative imports are extension-less and unresolvable
 // by Node's runtime loader.
 async function writeHtml(ctx: BuildCtx, slug: string, content: string): Promise<FilePath> {

@@ -2,8 +2,8 @@
 // in full on one page, newest first, so a reader can scroll through the whole
 // change history rather than opening files one at a time.
 //
-// logs/ is a sibling of the content root (docs/, via site/content -> ../docs),
-// not a descendant — same situation src/ is in — so Quartz's normal content
+// logs/ is a sibling of the content root (docs/, passed to Quartz via the resolved,
+// absolute `-d` flag), not a descendant — same situation src/ is in — so Quartz's normal content
 // pipeline never sees it and there is nothing to filter or index. This emitter
 // reads it directly off disk at build time, the same technique
 // onboarding-emitter.ts uses for its role-path data.
@@ -41,10 +41,12 @@ interface LogEntry {
   html: string
 }
 
-// site/plugins/logs-timeline-emitter.ts -> site/ is one level up. This is a fact about
-// the generated tree's own shape, not about the brain's layout — the brain's directory
-// names arrive through opts.
-function siteDir(): string {
+// .brain-site/plugins/logs-timeline-emitter.ts -> .brain-site/ is one level up. This is
+// a fact about the generated tree's own shape, not about the brain's layout — and by
+// the time opts reaches here in the real pipeline, opts.source is already an absolute
+// path (resolved by setup's resolveOverridePaths against the repository root), so this
+// is only ever consulted as a fallback base for an already-relative source.
+function generatedDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 }
 
@@ -138,7 +140,7 @@ export const LogsTimelineEmitter: QuartzEmitterPlugin<{ source?: string; route?:
 ) => ({
   name: "LogsTimelineEmitter",
   async emit(ctx, _content, resources): Promise<FilePath[]> {
-    const logsDir = resolveTimelineSource(opts, siteDir())
+    const logsDir = resolveTimelineSource(opts, generatedDir())
     if (logsDir === null) return []
 
     let entries: LogEntry[]

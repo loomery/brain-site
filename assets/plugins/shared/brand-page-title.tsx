@@ -11,7 +11,7 @@
 //   - The client half is NOT hardcoded. It is derived from `cfg.pageTitle`
 //     (configuration.pageTitle in quartz.config.yaml, templated from the
 //     project name at scaffold time) via deriveClientName() below. TO REBRAND
-//     FOR A DIFFERENT CLIENT: change `pageTitle` in site/quartz.config.yaml —
+//     FOR A DIFFERENT CLIENT: change `pageTitle` in .brain-site/quartz.config.yaml —
 //     nothing in this file needs to change. Current convention this assumes:
 //     pageTitle is "<Client>-<Project> Brain" (e.g. "Eque2-Chalkstring Brain"
 //     -> "Eque2") for brains whose project name itself has that shape. If a

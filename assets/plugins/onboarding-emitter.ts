@@ -16,7 +16,7 @@
 // parsed from the content directory at the start of a build, though, so reusing
 // it from an emitter means importing Quartz's own internal modules
 // (createMdProcessor/createHtmlProcessor, renderPage, the `write` helper, etc.)
-// from site/quartz/**.
+// from .brain-site/quartz/**.
 //
 // That does not work here. This plugin is a *local* source in quartz.config.yaml
 // (`./plugins/onboarding-emitter.ts`), and Quartz only symlinks local plugins —
@@ -30,7 +30,7 @@
 // (`from "../../util/path"`), which is fine when esbuild bundles the real build
 // entrypoint (quartz/build.ts) — esbuild resolves them — but Node's native
 // TypeScript support (which is all a symlinked local plugin gets) requires an
-// explicit extension on every relative specifier. Importing any site/quartz/**
+// explicit extension on every relative specifier. Importing any .brain-site/quartz/**
 // module transitively drags in that whole extension-less graph and fails. This
 // is not a workaround for a bug on our side; it is really not reachable from a
 // local plugin file as shipped, and quartz/** (the vendored Quartz engine) is
@@ -60,7 +60,7 @@
 
 import type { QuartzEmitterPlugin, FilePath } from "@quartz-community/types"
 
-// brain-plugins/ is deliberately outside site/ — a tested, dependency-free path
+// brain-plugins/ is deliberately outside .brain-site/ — a tested, dependency-free path
 // builder, kept out of the Quartz tree so it survives an engine upgrade and is
 // consumed as-is here, never reimplemented.
 import { buildRolePath, listRoles } from "@loomery/brain-site/lib/onboarding/paths.mjs"

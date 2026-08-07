@@ -1,5 +1,5 @@
 // Merges the shipped base Quartz config with a brain's override, producing the
-// effective config that setup writes to site/quartz.config.yaml.
+// effective config that setup writes to .brain-site/quartz.config.yaml.
 //
 // Written to a real file rather than merged in memory so the effective config stays
 // readable and diffable when a page renders wrong — see design doc §2.5.

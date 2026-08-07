@@ -11,16 +11,17 @@ configuration:
   # default if ever generated. See "Browsing the brain as a website" in this repo's
   # README.md/AGENTS.md before ever pointing this anywhere reachable.
   baseUrl: localhost:8080
-  # `site/content` is a symlink to `../docs` (repo root's docs/), so Quartz's content
-  # root IS docs/ — src/, node_modules/, site/, logs/, skills/ and .git/ are siblings of
-  # docs/ and are structurally unreachable by the glob already; they're listed here
-  # anyway as defense-in-depth if the symlink strategy ever changes. The pattern that
-  # actually does work is `inbox/**`, since paths here are relative to the content root
-  # (docs/), not the repo root.
+  # Quartz's content root is the brain's docs/ (an absolute path, resolved by setup's
+  # resolveOverridePaths from brain-site.yaml's `content:` key and passed via the `-d`
+  # flag — never a symlink) — src/, node_modules/, .brain-site/, logs/, skills/ and
+  # .git/ are siblings of docs/ and are structurally unreachable by the glob already;
+  # they're listed here anyway as defense-in-depth against a future layout change. The
+  # pattern that actually does work is `inbox/**`, since paths here are relative to the
+  # content root (docs/), not the repo root.
   ignorePatterns:
     - "src/**"
     - "node_modules/**"
-    - "site/**"
+    - ".brain-site/**"
     - "logs/**"
     - "skills/**"
     - "docs/inbox/**"
@@ -37,7 +38,7 @@ configuration:
   # where the near-black surface gives it >13:1 contrast.
   #
   # The client half of the co-branded page title ("Loomery × <client>", rendered by
-  # site/plugins/shared/brand-page-title.tsx) is derived from `pageTitle` above — to
+  # .brain-site/plugins/shared/brand-page-title.tsx) is derived from `pageTitle` above — to
   # rebrand this site for a different client, change `pageTitle`; nothing else in this
   # config or in brand-page-title.tsx needs to change. Known limitation: the derivation
   # is a string heuristic (text before the first "-", after stripping a trailing
@@ -262,8 +263,8 @@ plugins:
     layout:
       position: beforeBody
       priority: 30
-  # Component swap, not the stock component — see site/quartz.ts, which registers
-  # site/plugins/shared/brand-page-title.tsx (LoomeryBrandTitle) against this exact
+  # Component swap, not the stock component — see .brain-site/quartz.ts, which registers
+  # .brain-site/plugins/shared/brand-page-title.tsx (LoomeryBrandTitle) against this exact
   # source key before this plugin's own loader runs. Left `enabled: true` here (rather
   # than disabled) because the source key itself must still match what quartz.ts
   # registers against.

@@ -14,6 +14,10 @@ function checkStringField(value, name, errors) {
   }
 }
 
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 export function validateOverride(override) {
   const errors = []
   const config = override ?? {}
@@ -30,22 +34,38 @@ export function validateOverride(override) {
 
   const sections = config.sections
   if (sections !== undefined) {
-    for (const key of Object.keys(sections)) {
-      if (!SECTIONS.has(key)) {
-        errors.push(`unknown section "${key}" — allowed: ${[...SECTIONS].join(", ")}`)
-      }
-    }
-    const timeline = sections.timeline
-    if (timeline !== undefined) {
-      for (const key of Object.keys(timeline)) {
-        if (!TIMELINE.has(key)) {
-          errors.push(`unknown key "sections.timeline.${key}"`)
+    if (!isPlainObject(sections)) {
+      errors.push(`sections must be an object, got ${describeType(sections)}`)
+    } else {
+      for (const key of Object.keys(sections)) {
+        if (!SECTIONS.has(key)) {
+          errors.push(`unknown section "${key}" — allowed: ${[...SECTIONS].join(", ")}`)
         }
       }
-      checkStringField(timeline.source, "sections.timeline.source", errors)
-      checkStringField(timeline.route, "sections.timeline.route", errors)
+      const timeline = sections.timeline
+      if (timeline !== undefined) {
+        if (!isPlainObject(timeline)) {
+          errors.push(`sections.timeline must be an object, got ${describeType(timeline)}`)
+        } else {
+          for (const key of Object.keys(timeline)) {
+            if (!TIMELINE.has(key)) {
+              errors.push(
+                `unknown key "sections.timeline.${key}" — allowed: ${[...TIMELINE].join(", ")}`,
+              )
+            }
+          }
+          checkStringField(timeline.source, "sections.timeline.source", errors)
+          checkStringField(timeline.route, "sections.timeline.route", errors)
+        }
+      }
     }
   }
 
   return { ok: errors.length === 0, errors }
+}
+
+function describeType(value) {
+  if (value === null) return "null"
+  if (Array.isArray(value)) return "array"
+  return typeof value
 }

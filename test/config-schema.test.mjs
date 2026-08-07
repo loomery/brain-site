@@ -37,3 +37,27 @@ test("pageTitle must be a string", () => {
 test("an empty override is valid — every key has a default", () => {
   assert.equal(validateOverride({}).ok, true)
 })
+
+test("sections: null is rejected, not thrown", () => {
+  const { ok, errors } = validateOverride({ sections: null })
+  assert.equal(ok, false)
+  assert.match(errors[0], /sections/)
+})
+
+test("sections.timeline: null is rejected, not thrown", () => {
+  const { ok, errors } = validateOverride({ sections: { timeline: null } })
+  assert.equal(ok, false)
+  assert.match(errors[0], /sections\.timeline/)
+})
+
+test("sections: 5 is rejected rather than silently passing", () => {
+  const { ok, errors } = validateOverride({ sections: 5 })
+  assert.equal(ok, false)
+  assert.match(errors[0], /sections/)
+})
+
+test("sections: [] is rejected rather than silently passing", () => {
+  const { ok, errors } = validateOverride({ sections: [] })
+  assert.equal(ok, false)
+  assert.match(errors[0], /sections/)
+})

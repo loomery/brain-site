@@ -1,0 +1,129 @@
+@use "./variables.scss" as *;
+
+// Loomery design system — self-hosted brand fonts.
+//
+// `theme.fontOrigin: local` in quartz.config.yaml means Quartz does no font
+// loading of its own — it only sets --headerFont/--bodyFont/--codeFont to the
+// family *names* below and expects @font-face rules supplied here ("let the
+// user do it themselves in css" — quartz/plugins/emitters/componentResources.ts).
+// Font files are served from quartz/static/fonts/ (copied verbatim from the
+// Loomery design-system skill's fonts/ directory), which the Static emitter
+// publishes at /static/fonts/* regardless of page depth — see quartz/plugins/
+// emitters/static.ts — so these paths work unchanged from every page.
+//
+// Only 4 of the design system's 15 OTFs are shipped: Regular (400) and
+// Medium (500) for "The Future", and both mono weights the system ships,
+// Light (300) and Regular (400), for "The Future Mono" — not the full family
+// (which also has Thin/Extralight/Light/Bold/Black plus italics in each). No
+// Bold/Black face exists locally, so:
+//   - Body/paragraph italics (`*text*` → <em>) fall back to browser-synthesized
+//     oblique, same as any font shipping no italic face — a normal, accepted
+//     web fallback, not specific to this build.
+//   - Quartz's base stylesheet asks for heavier synthetic weights than we
+//     ship (h1-h6 revert to the UA bold/700, `strong`/`a` request 600) that
+//     don't exist in Regular/Medium. Left alone this makes the browser fake
+//     a heavier weight by algorithmically thickening Regular ("synthetic
+//     bold"), which looks noticeably worse than the real Medium face. The
+//     override block below pins those to 500 so real Medium renders instead.
+@font-face {
+  font-family: "The Future";
+  src: url("/static/fonts/TheFuture-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "The Future";
+  src: url("/static/fonts/TheFuture-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "The Future Mono";
+  src: url("/static/fonts/TheFutureMono-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "The Future Mono";
+  src: url("/static/fonts/TheFutureMono-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+strong,
+b,
+a {
+  font-weight: 500;
+}
+
+// Relaxed vertical rhythm, sourced from the Loomery DS's own type tokens rather
+// than an invented number.
+//
+// The DS's body-text ratio (line-height ÷ font-size) is a uniform 1.5 across
+// every non-display role — paragraph regular (24÷16), large (27÷18), extra-large
+// (36÷24), caption (21÷14) and monospaced (18÷12) all reduce to exactly 1.5.
+// Only display/heading roles go tighter (1.07-1.25), which is expected: display
+// type needs tighter leading and is not a substitute for body copy.
+//
+// Quartz's own stock rule (base.scss: `tbody, li, p { line-height: 1.6rem }`,
+// i.e. 25.6px ÷ 16px = 1.6) is already LOOSER than that 1.5 ceiling, so applying
+// the DS ratio literally would tighten it — the opposite of "relaxed". So this
+// takes the next rung up instead: of every line-height value the DS defines
+// (16, 18, 21, 24, 27, 28, 36, 40, 48, 64, 76, 90, 100), the first above 25.6px
+// is 27 — the DS's paragraph-large line-height. Expressed unitless (27÷16 =
+// 1.6875) rather than a fixed rem length, so it scales correctly in nested
+// font-size contexts, unlike the fixed-rem rule it replaces.
+//
+// Does not reach Mermaid: its diagram nodes are not <p>/<li>/<tbody> elements,
+// so diagram label boxes are unaffected (worth re-checking on a cold load if
+// this selector is ever widened — Mermaid measures label boxes once and does
+// not re-measure).
+tbody,
+li,
+p {
+  line-height: 1.6875;
+}
+
+// List-item spacing: Quartz ships zero space between <li> siblings — the one
+// place in the rhythm with no breathing room at all. Reuses the DS's own
+// paragraph-to-paragraph gap ratio (paragraph-regular-spacing 16 ÷ font-size 16
+// = 1em) rather than inventing a list-specific number: list items read as a
+// sequence of small paragraphs, so the same 1em rhythm is consistent.
+//
+// Paragraph spacing itself is deliberately untouched — Quartz's UA-default
+// `p { margin: 1em 0 }` already collapses to a 1em gap, which already matches
+// this same DS ratio.
+//
+// Scoped to `article` (real page content) rather than a global `li`: the
+// Explorer file tree, table of contents and backlinks panels are also built from
+// <li>, and this is about body copy, not sidebar navigation density — widening
+// those would be a regression, not a relax.
+article li {
+  margin-bottom: 1em;
+}
+
+// Table of Contents item spacing. The component's own stylesheet
+// (@quartz-community/table-of-contents) sets `padding-left` per depth for
+// indentation but no vertical gap between <li> siblings at all — confirmed
+// by reading its bundled CSS directly, not assumed. This is UI navigation
+// density, not body-copy rhythm, so it isn't drawn from the DS's paragraph
+// tokens (those don't cover chrome/nav); 0.35rem is a direct, modest value.
+// No margin on the first item, so the list doesn't gain extra space under
+// the "Table of Contents" header on top of the header's own margin.
+ul.toc-content.overflow > li {
+  margin-top: 0.35rem;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}

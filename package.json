@@ -3,12 +3,25 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Shared Quartz frontend for Loomery project brains. Ships the skin; the brain owns its content and file structure.",
-  "bin": { "brain-site": "./bin/brain-site.mjs" },
+  "bin": {
+    "brain-site": "./bin/brain-site.mjs"
+  },
   "exports": {
     "./lib/*": "./src/lib/*",
     "./config/*": "./src/config/*"
   },
-  "files": ["bin", "src", "assets"],
-  "scripts": { "test": "node --test" },
-  "engines": { "node": ">=22" }
+  "files": [
+    "bin",
+    "src",
+    "assets"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  }
 }

@@ -75,15 +75,25 @@ function jsTag(resource: {
 // excluded: those are genuinely per-page data, and copying them from an
 // unrelated page would show wrong information, not missing information.
 //
-// The catch: emitters run concurrently (quartz/processors/emit.ts runs all
-// non-dispatcher emitters via `Promise.all`), so there is no ordering
-// guarantee that the real content-page emitter has already written
-// `index.html` by the time this reads it. This polls with a bounded timeout
-// and falls back to an empty sidebar (today's behavior, not a regression) if
-// the race doesn't resolve in time — a best-effort enhancement, not a
-// dependency this can silently break on.
+// The donor is not a fixed filename (see findDonorChrome below): every
+// content page carries identical chrome, so any already-built root-level
+// page will do, with index.html preferred only because it's the
+// conventional, most-likely-already-built one. A brain with no docs/index.md
+// (this package must never require one — see the file's governing
+// principle) still has other root-level content pages Quartz built from its
+// actual docs, so those remain valid donors.
 
 let cachedChrome: { left: string; right: string; extraCss: string } | null = null
+
+// Test-only escape hatch: cachedChrome is a deliberate once-per-build
+// singleton (a real build calls loadRealPageChrome many times across many
+// emitted pages and should only ever search the output directory once), but
+// that same singleton would leak a donor chosen by one test into every test
+// that runs after it in the same process. Not used anywhere in the actual
+// emit path.
+export function __resetDonorChromeCacheForTests(): void {
+  cachedChrome = null
+}
 
 function findBalancedDiv(html: string, openTag: string): { inner: string; start: number; end: number } | null {
   const start = html.indexOf(openTag)
@@ -156,69 +166,149 @@ function stripScriptTags(html: string): string {
   return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "")
 }
 
-async function waitForFile(filePath: string, timeoutMs: number, intervalMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  for (;;) {
-    if (fs.existsSync(filePath)) return true
-    if (Date.now() >= deadline) return false
-    await new Promise((resolve) => setTimeout(resolve, intervalMs))
-  }
+export interface DonorChrome {
+  left: string
+  right: string
+  extraCss: string
 }
 
+// Every content page carries identical sidebar chrome, so the donor is
+// selected by *availability*, not by a fixed filename — except for pages
+// known in advance to be unsuitable donors, which are never candidates
+// regardless of what's on disk:
+//   - "404": verified to contain no sidebar containers at all.
+//   - "logs" / "onboarding": these hand-written emitters' own outputs. A
+//     stale one from a previous build has the sidebar *containers* but an
+//     *empty* Explorer inside them (today's fallback, see below) — accepting
+//     one as a donor would silently propagate that emptiness forward rather
+//     than fixing it.
+// A caller can extend this with its own slug(s) via loadRealPageChrome's
+// second argument — see the home-page emitter, which must never treat its
+// own (about-to-be-generated) index.html as its own donor.
+const DEFAULT_EXCLUDED_DONOR_SLUGS = new Set(["404", "logs", "onboarding"])
+
+export function extractChromeFromHtml(html: string): DonorChrome | null {
+  const leftFound = findBalancedDiv(html, '<div class="left sidebar">')
+  const rightFound = findBalancedDiv(html, '<div class="right sidebar">')
+  if (!leftFound || !rightFound) return null
+
+  // Per-page data — wrong if copied from an unrelated page — not merely
+  // absent chrome.
+  const right = stripDivsByClass(stripDivsByClass(rightFound.inner, "toc"), "backlinks")
+
+  const left = toRootRelative(stripScriptTags(leftFound.inner))
+  const rightClean = toRootRelative(stripScriptTags(right))
+
+  // A container with nothing in it (e.g. a stale hand-written page emitted
+  // before any donor was available, or a real page whose layout genuinely
+  // carries no sidebar content) is not a usable donor — reject it so the
+  // caller keeps searching rather than silently propagating emptiness.
+  if (left.trim().length === 0 || rightClean.trim().length === 0) return null
+
+  // The per-component stylesheets (Explorer, Search, Graph, etc.) that make
+  // this chrome actually look like anything are NOT part of the `resources`
+  // argument this plugin's own emitter receives — they get attached to
+  // `resources.css` per-layout by the real component-tree renderer this
+  // page shell can't call (see the file banner), so a hand-written page's
+  // own `resources.css` list is missing every one of them: confirmed by
+  // diffing `<link ... component-*.css>` tags between a synthetic page and
+  // a real one — 0 vs 18. They're the same 18 files on every real page
+  // (registered site-wide, not per-page), so lifting every stylesheet
+  // `<link>` out of this same already-rendered page's <head> is exact, not
+  // approximate — this is the actual, current set for this build, not a
+  // hand-maintained guess that drifts on the next dependency bump.
+  // Also lift `rel="preconnect"` hints for the Google Fonts CDN, not just
+  // the stylesheet links themselves — without them the browser doesn't
+  // start that connection until it parses the stylesheet link, which
+  // widens the window where Mermaid measures node-box sizes against a
+  // fallback font before the real webfont swaps in and overflows them
+  // (found by reproducing it: `document.fonts.ready` fixed a page that
+  // looked broken on load, confirming a font-load race, not a content bug).
+  // This narrows that window; it does not close it on a slow connection.
+  const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/)
+  const extraCss = headMatch
+    ? (headMatch[1].match(/<link[^>]*rel="(?:stylesheet|preconnect)"[^>]*>/g) ?? []).join("\n")
+    : ""
+
+  return { left, right: rightClean, extraCss: toRootRelative(extraCss) }
+}
+
+// Root-level pages only: `readdir(outputDir)` is deliberately non-recursive,
+// so a nested page (e.g. technical/context.html) is never even a candidate —
+// see toRootRelative's own comment for why reusing a nested page's relative
+// URLs verbatim would produce broken asset links. index.html sorts first
+// when present and usable: every content page carries identical chrome, so
+// any donor is exact, but index.html is the conventional, most-likely-
+// already-built one, so preferring it avoids picking arbitrarily.
+function listDonorSlugs(outputDir: string, excludeSlugs: Set<string>): string[] {
+  let entries: string[]
+  try {
+    entries = fs.readdirSync(outputDir)
+  } catch {
+    return []
+  }
+  const slugs = entries
+    .filter((name) => name.endsWith(".html"))
+    .map((name) => name.slice(0, -".html".length))
+    .filter((slug) => !excludeSlugs.has(slug))
+  slugs.sort((a, b) => {
+    if (a === "index") return -1
+    if (b === "index") return 1
+    return a.localeCompare(b)
+  })
+  return slugs
+}
+
+// Pure, synchronous-per-candidate donor search against an already-built (or
+// partially-built) output directory — no polling, no module-level caching.
+// Exported so tests can drive it directly against a fixture directory of
+// small HTML files rather than a full Quartz build.
+export function findDonorChrome(
+  outputDir: string,
+  excludeSlugs: Set<string> = new Set(),
+): DonorChrome | null {
+  const merged = new Set([...DEFAULT_EXCLUDED_DONOR_SLUGS, ...excludeSlugs])
+  for (const slug of listDonorSlugs(outputDir, merged)) {
+    let html: string
+    try {
+      html = fs.readFileSync(path.join(outputDir, `${slug}.html`), "utf8")
+    } catch {
+      continue
+    }
+    const chrome = extractChromeFromHtml(html)
+    if (chrome) return chrome
+  }
+  return null
+}
+
+// The catch: emitters run concurrently (quartz/processors/emit.ts runs all
+// non-dispatcher emitters via `Promise.all`), so there is no ordering
+// guarantee that any other page has already been written by the time this
+// runs. This polls with a bounded timeout and falls back to empty chrome
+// (today's behavior, not a regression) if no usable donor turns up in time —
+// a best-effort enhancement, not a dependency this can silently break on.
 async function loadRealPageChrome(
   ctx: BuildCtx,
-): Promise<{ left: string; right: string; extraCss: string }> {
+  excludeSlugs: Set<string> = new Set(),
+): Promise<DonorChrome> {
   if (cachedChrome) return cachedChrome
 
-  const indexPath = path.join(ctx.argv.output, "index.html")
-  try {
-    const found = await waitForFile(indexPath, 3000, 30)
-    if (!found) throw new Error(`${indexPath} did not appear within the wait budget`)
-    const html = await fs.promises.readFile(indexPath, "utf8")
-
-    const left = findBalancedDiv(html, '<div class="left sidebar">')
-    const rightRaw = findBalancedDiv(html, '<div class="right sidebar">')
-    if (!left || !rightRaw) throw new Error("could not locate sidebar containers in index.html")
-
-    // Per-page data — wrong if copied from an unrelated page — not merely
-    // absent chrome.
-    const right = stripDivsByClass(stripDivsByClass(rightRaw.inner, "toc"), "backlinks")
-
-    // The per-component stylesheets (Explorer, Search, Graph, etc.) that make
-    // this chrome actually look like anything are NOT part of the `resources`
-    // argument this plugin's own emitter receives — they get attached to
-    // `resources.css` per-layout by the real component-tree renderer this
-    // page shell can't call (see the file banner), so a hand-written page's
-    // own `resources.css` list is missing every one of them: confirmed by
-    // diffing `<link ... component-*.css>` tags between a synthetic page and
-    // a real one — 0 vs 18. They're the same 18 files on every real page
-    // (registered site-wide, not per-page), so lifting every stylesheet
-    // `<link>` out of this same already-rendered page's <head> is exact, not
-    // approximate — this is the actual, current set for this build, not a
-    // hand-maintained guess that drifts on the next dependency bump.
-    // Also lift `rel="preconnect"` hints for the Google Fonts CDN, not just
-    // the stylesheet links themselves — without them the browser doesn't
-    // start that connection until it parses the stylesheet link, which
-    // widens the window where Mermaid measures node-box sizes against a
-    // fallback font before the real webfont swaps in and overflows them
-    // (found by reproducing it: `document.fonts.ready` fixed a page that
-    // looked broken on load, confirming a font-load race, not a content bug).
-    // This narrows that window; it does not close it on a slow connection.
-    const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/)
-    const extraCss = headMatch
-      ? (headMatch[1].match(/<link[^>]*rel="(?:stylesheet|preconnect)"[^>]*>/g) ?? []).join("\n")
-      : ""
-
-    cachedChrome = {
-      left: toRootRelative(stripScriptTags(left.inner)),
-      right: toRootRelative(stripScriptTags(right)),
-      extraCss: toRootRelative(extraCss),
+  const outputDir = ctx.argv.output
+  const deadline = Date.now() + 3000
+  for (;;) {
+    const chrome = findDonorChrome(outputDir, excludeSlugs)
+    if (chrome) {
+      cachedChrome = chrome
+      return chrome
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.warn(`[page-shell] real sidebar chrome unavailable, falling back to empty: ${message}`)
-    cachedChrome = { left: "", right: "", extraCss: "" }
+    if (Date.now() >= deadline) break
+    await new Promise((resolve) => setTimeout(resolve, 30))
   }
+
+  console.warn(
+    "[page-shell] real sidebar chrome unavailable, falling back to empty: no usable donor page found",
+  )
+  cachedChrome = { left: "", right: "", extraCss: "" }
   return cachedChrome
 }
 
@@ -235,13 +325,20 @@ export async function pageShell(
   // after it to match. Optional and empty by default so existing callers
   // (onboarding-emitter.ts) are unaffected.
   tocHtml: string = "",
+  // Slugs that must never be picked as this page's own donor, on top of the
+  // built-in exclusions (see DEFAULT_EXCLUDED_DONOR_SLUGS). Empty by default
+  // so existing callers (onboarding-emitter.ts, logs-timeline-emitter.ts) are
+  // unaffected. The home-page emitter passes its own slug ("index") here:
+  // it is the one caller that can be *writing* that exact file, so it must
+  // never treat its own (possibly still-empty) output as a donor for itself.
+  donorExclude: Iterable<string> = [],
 ): Promise<string> {
   const hashed = ctx.hashedResourceNames ?? {}
   const indexCss = hashed["index.css"] ?? "index.css"
   const prescript = hashed["prescript.js"] ?? "prescript.js"
   const postscript = hashed["postscript.js"] ?? "postscript.js"
 
-  const chrome = await loadRealPageChrome(ctx)
+  const chrome = await loadRealPageChrome(ctx, new Set(donorExclude))
 
   const headCss = [
     `<link rel="stylesheet" href="/${indexCss}" data-persist="true">`,
@@ -312,9 +409,10 @@ export async function emitPage(
   bodyHtml: string,
   loggerLabel: string,
   tocHtml: string = "",
+  donorExclude: Iterable<string> = [],
 ): Promise<FilePath> {
   try {
-    const html = await pageShell(ctx, resources, slug, title, bodyHtml, tocHtml)
+    const html = await pageShell(ctx, resources, slug, title, bodyHtml, tocHtml, donorExclude)
     return await writeHtml(ctx, slug, html)
   } catch (err) {
     const message = err instanceof Error ? (err.stack ?? err.message) : String(err)

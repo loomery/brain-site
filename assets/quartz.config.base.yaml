@@ -160,6 +160,14 @@ plugins:
   # not run for a client build if one is ever wired up.
   - source: "./plugins/logs-timeline-emitter.ts"
     enabled: true
+  # Emits `/` when (and only when) the brain has no docs/index.md — Quartz's
+  # own folder-page plugin deliberately never generates a root index (see
+  # home-emitter.ts's own banner for the confirmed source-level reason), so a
+  # brain that hasn't written its own home page would otherwise 404 at its
+  # own root. A brain that does have docs/index.md is untouched: this
+  # emitter checks first and no-ops.
+  - source: "./plugins/home-emitter.ts"
+    enabled: true
   # Fail-closed audience partition. Disabled while this site is internal-only and
   # unhosted: with nothing published there is nothing to partition, and enabling it
   # now only risks hiding pages. MUST be enabled, with a per-build `audience`, and

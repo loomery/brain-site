@@ -61,3 +61,19 @@ test("sections: [] is rejected rather than silently passing", () => {
   assert.equal(ok, false)
   assert.match(errors[0], /sections/)
 })
+
+test("static is accepted as a string naming a brain-owned static directory", () => {
+  const { ok, errors } = validateOverride({ static: "assets/static" })
+  assert.equal(ok, true)
+  assert.deepEqual(errors, [])
+})
+
+test("static must be a string", () => {
+  const { ok, errors } = validateOverride({ static: 42 })
+  assert.equal(ok, false)
+  assert.match(errors[0], /static/)
+})
+
+test("omitting static is valid — it has no required default", () => {
+  assert.equal(validateOverride({}).ok, true)
+})

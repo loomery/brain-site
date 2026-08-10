@@ -4,7 +4,7 @@
 // almost always a typo or a brain quietly forking the skin, and both should be loud.
 // `extraPlugins` is the one declared escape hatch — see design doc §2.2.
 
-const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "extraPlugins"])
+const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "extraPlugins", "static"])
 const SECTIONS = new Set(["timeline"])
 const TIMELINE = new Set(["source", "route"])
 
@@ -31,6 +31,7 @@ export function validateOverride(override) {
   checkStringField(config.pageTitle, "pageTitle", errors)
   checkStringField(config.content, "content", errors)
   checkStringField(config.extraPlugins, "extraPlugins", errors)
+  checkStringField(config.static, "static", errors)
 
   const sections = config.sections
   if (sections !== undefined) {

@@ -12,22 +12,36 @@
 //
 // What it does, in order:
 //   1. Refuse to continue on Node < 22 (Quartz v5's own requirement).
-//   2. Read <rootDir>/brain-site.yaml, validate it, and resolve its `content` and
-//      `sections.timeline.source` paths (relative to rootDir) to absolute paths, so
-//      nothing downstream has to know or guess what directory it's running from.
-//   3. If <rootDir>/.brain-site/quartz/build.ts doesn't exist yet, `git clone --depth 1`
+//   2. Read <rootDir>/brain-site.yaml, validate it, and resolve its `content`,
+//      `sections.timeline.source` and `static` paths (relative to rootDir) to absolute
+//      paths, so nothing downstream has to know or guess what directory it's running
+//      from.
+//   3. Register .brain-site/ in <rootDir>/.git/info/exclude — NOT .gitignore — before
+//      the directory exists. See "Why the generated tree is excluded, not gitignored"
+//      below.
+//   4. If <rootDir>/.brain-site/quartz/build.ts doesn't exist yet, `git clone --depth 1`
 //      the upstream Quartz repo into a scratch directory, strip its .git, and merge it
 //      into .brain-site/ — skipping any path that already exists there, so this
 //      package's own quartz.ts and plugins/ are never overwritten by the clone.
 //      Quartz's own package.json lands in .brain-site/ and is used as-is; it is never
 //      merged with anything.
-//   4. Copy this package's quartz.ts, plugins/**, styles/** and fonts/** into
+//   5. Copy this package's quartz.ts, plugins/**, styles/** and fonts/** into
 //      .brain-site/ — these are authoritative and always win.
-//   5. Merge the resolved override onto the shipped base config, and write the result
+//   6. If `static:` is set, merge its contents into .brain-site/quartz/static/ —
+//      without clobbering this package's own files already placed there (fonts/**).
+//   7. Merge the resolved override onto the shipped base config, and write the result
 //      to .brain-site/quartz.config.yaml.
-//   6. `npm i` and `npx quartz plugin install --from-config` inside .brain-site/.
-//   7. When `then` is "build" or "serve", run `npx quartz build [-d <content>]
+//   8. `npm i` and `npx quartz plugin install --from-config` inside .brain-site/.
+//   9. When `then` is "build" or "serve", run `npx quartz build [-d <content>]
 //      [--serve]` inside .brain-site/.
+//
+// Why the generated tree is excluded, not gitignored (design doc §2.6): Quartz's
+// Static emitter copies quartz/static/** via globby(pattern, { gitignore: true }).
+// globby only reads .gitignore files — if .brain-site/ is listed there, every file
+// beneath it matches an ignore rule and globby returns nothing, so fonts, the favicon,
+// the OG image and any brain-owned static/ content silently vanish from the build
+// while sitting on disk untouched. git/info/exclude gets git the same "don't track
+// this" result without a .gitignore file for globby to read.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -62,6 +76,122 @@ function checkNodeVersion() {
     return false
   }
   return true
+}
+
+// Normalizes a .gitignore/.git/info/exclude line for comparison against
+// GENERATED_DIR_NAME: strips a leading "/" (an anchor to the file's own directory,
+// still the repo root here) and any trailing "/" (directory marker) or "/**".
+function normalizeIgnoreLine(line) {
+  return line
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/\*\*$/, "")
+    .replace(/\/+$/, "")
+}
+
+// If the brain's own .gitignore already lists .brain-site/, that ignore rule is what
+// makes globby's `{ gitignore: true }` treat every file beneath it as ignored — see the
+// file banner. This is now a bug in the *consuming* repo, not something setup can fix
+// on its brain-site.yaml — write access to .gitignore is that repo's, so setup only
+// warns, loudly, and never edits it.
+function checkGitignoreForConflict(rootDir) {
+  const gitignorePath = path.join(rootDir, ".gitignore")
+  let contents
+  try {
+    contents = fs.readFileSync(gitignorePath, "utf8")
+  } catch {
+    return
+  }
+
+  const hasConflict = contents
+    .split(/\r?\n/)
+    .some((line) => line.trim().length > 0 && normalizeIgnoreLine(line) === GENERATED_DIR_NAME)
+
+  if (hasConflict) {
+    logError("=".repeat(72))
+    logError(
+      `WARNING: .gitignore lists "${GENERATED_DIR_NAME}/". This silently breaks the ` +
+        "build: Quartz's Static emitter copies quartz/static/** using globby's " +
+        "{ gitignore: true } option, which reads .gitignore files, so every font, the " +
+        "favicon, the OG image and any brain-owned static/ content beneath " +
+        `${GENERATED_DIR_NAME}/ will be treated as ignored and silently dropped from ` +
+        "every build.",
+    )
+    logError(
+      `Remove the "${GENERATED_DIR_NAME}/" line from .gitignore — setup already keeps ` +
+        `${GENERATED_DIR_NAME}/ out of git via .git/info/exclude, which globby never reads.`,
+    )
+    logError("=".repeat(72))
+  }
+}
+
+// Resolves the real git directory for rootDir: ordinarily <rootDir>/.git, but a
+// worktree or submodule checkout instead has a *file* there containing
+// "gitdir: <path-to-the-real-git-dir>". Returns null if neither shape is found, rather
+// than throwing — the caller treats that as "not a git repo (or one setup can't find)"
+// and continues without exclude support instead of crashing.
+function findGitDir(rootDir) {
+  const gitPath = path.join(rootDir, ".git")
+  let stat
+  try {
+    stat = fs.statSync(gitPath)
+  } catch {
+    return null
+  }
+
+  if (stat.isDirectory()) return gitPath
+
+  if (stat.isFile()) {
+    const contents = fs.readFileSync(gitPath, "utf8")
+    const match = contents.match(/^gitdir:\s*(.+)$/m)
+    if (!match) return null
+    const gitDir = match[1].trim()
+    return path.isAbsolute(gitDir) ? gitDir : path.resolve(rootDir, gitDir)
+  }
+
+  return null
+}
+
+// Registers .brain-site/ in .git/info/exclude — never .gitignore (see the file
+// banner) — so git ignores the generated tree without globby ever seeing a rule for
+// it. Idempotent: checks for an existing entry (in whatever form — with or without a
+// leading/trailing slash) before appending, so re-running setup never duplicates the
+// line. Must run before the generated directory is created, so there is no window in
+// which it exists un-ignored.
+function ensureGitExclude(rootDir) {
+  checkGitignoreForConflict(rootDir)
+
+  const gitDir = findGitDir(rootDir)
+  if (gitDir === null) {
+    logError(
+      `could not locate a .git directory at or above ${rootDir} — skipping ` +
+        `.git/info/exclude setup. ${GENERATED_DIR_NAME}/ will not be automatically ` +
+        "ignored by git; if this is a real git repository, add it yourself.",
+    )
+    return
+  }
+
+  const infoDir = path.join(gitDir, "info")
+  fs.mkdirSync(infoDir, { recursive: true })
+  const excludePath = path.join(infoDir, "exclude")
+
+  let existing = ""
+  try {
+    existing = fs.readFileSync(excludePath, "utf8")
+  } catch {
+    existing = ""
+  }
+
+  const alreadyPresent = existing
+    .split(/\r?\n/)
+    .some((line) => line.trim().length > 0 && normalizeIgnoreLine(line) === GENERATED_DIR_NAME)
+  if (alreadyPresent) return
+
+  const needsLeadingNewline = existing.length > 0 && !existing.endsWith("\n")
+  fs.appendFileSync(
+    excludePath,
+    `${needsLeadingNewline ? "\n" : ""}${GENERATED_DIR_NAME}/\n`,
+  )
 }
 
 // Top-level entries inside .brain-site/ this package already owns before any clone
@@ -174,6 +304,45 @@ function copyPackageAssets(generatedDir) {
   }
 }
 
+// Merges resolvedOverride.static (already an absolute path — see resolveOverridePaths)
+// into .brain-site/quartz/static/, so a brain's own images resolve at the /static/**
+// URLs it embeds them with, without this shared package carrying anything
+// client-specific. A no-op when `static:` is unset — most brains won't set it.
+//
+// Reuses mergeCopy, the same skip-if-exists-at-the-leaf walk vendorQuartz uses to keep
+// this package's own files from being overwritten by the upstream clone: called after
+// copyPackageAssets has already placed quartz/static/fonts/** here, so a brain-owned
+// static/ that happens to collide with an existing path (fonts/, most obviously) never
+// clobbers this package's own files — it merges in around them instead.
+//
+// Returns false (after logging a clear error, not throwing) if `static:` names a path
+// that doesn't exist or isn't a directory, so setup can fail cleanly rather than crash.
+function copyBrainStatic(generatedDir, resolvedOverride) {
+  const staticSrc = resolvedOverride?.static
+  if (typeof staticSrc !== "string" || staticSrc.length === 0) return true
+
+  let stat
+  try {
+    stat = fs.statSync(staticSrc)
+  } catch {
+    logError(`static: directory not found: ${staticSrc}`)
+    return false
+  }
+  if (!stat.isDirectory()) {
+    logError(`static: not a directory: ${staticSrc}`)
+    return false
+  }
+
+  const dest = path.join(generatedDir, "quartz", "static")
+  fs.mkdirSync(dest, { recursive: true })
+  const skipped = []
+  mergeCopy(staticSrc, dest, { skippedForLog: skipped })
+  if (skipped.length > 0) {
+    log(`static: kept this package's own version of: ${skipped.join(", ")}`)
+  }
+  return true
+}
+
 // Reads <rootDir>/brain-site.yaml, validates it, and returns the parsed override — or
 // null plus printed errors on failure. An empty (or missing-keys) file parses to
 // `null`, which validateOverride treats as an empty override.
@@ -197,20 +366,25 @@ function readOverride(rootDir) {
 }
 
 // Resolves the override's brain-relative path fields (`content`,
-// `sections.timeline.source`) against rootDir into absolute paths, before they reach
-// the generated config or the build command's `-d` flag. This is the one place that
-// does this arithmetic — everything downstream (mergeConfig, the `-d` flag, the
-// logs-timeline-emitter plugin) receives an already-absolute path and never has to know
-// what directory it's running from or work out a relative offset to rootDir.
-// `sections.timeline.source`'s default (when `sections.timeline` is declared but
-// `source` is omitted) is "logs" — a sibling of the tracked brain-site.yaml at rootDir
-// — resolved the same way as an explicit value.
+// `sections.timeline.source`, `static`) against rootDir into absolute paths, before
+// they reach the generated config or the build command's `-d` flag. This is the one
+// place that does this arithmetic — everything downstream (mergeConfig, the `-d` flag,
+// the logs-timeline-emitter plugin, copyBrainStatic) receives an already-absolute path
+// and never has to know what directory it's running from or work out a relative offset
+// to rootDir. `sections.timeline.source`'s default (when `sections.timeline` is
+// declared but `source` is omitted) is "logs" — a sibling of the tracked
+// brain-site.yaml at rootDir — resolved the same way as an explicit value. `static` has
+// no default: an unset `static` stays unset, since most brains don't have one.
 function resolveOverridePaths(rootDir, override) {
   if (!override) return override
   const resolved = { ...override }
 
   if (typeof override.content === "string" && override.content.length > 0) {
     resolved.content = path.resolve(rootDir, override.content)
+  }
+
+  if (typeof override.static === "string" && override.static.length > 0) {
+    resolved.static = path.resolve(rootDir, override.static)
   }
 
   const timeline = override.sections?.timeline
@@ -271,10 +445,15 @@ export async function runSetup({ rootDir, then }) {
   if (!ok) return 1
   const resolvedOverride = resolveOverridePaths(rootDir, override)
 
+  // Must run before the generated directory can possibly exist — see the file banner
+  // and design doc §2.6.
+  ensureGitExclude(rootDir)
+
   const generatedDir = path.join(rootDir, GENERATED_DIR_NAME)
 
   vendorQuartz(generatedDir)
   copyPackageAssets(generatedDir)
+  if (!copyBrainStatic(generatedDir, resolvedOverride)) return 1
   writeConfig(generatedDir, resolvedOverride)
 
   installAndConfigurePlugins(generatedDir)

@@ -19,7 +19,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 import type { QuartzEmitterPlugin, FilePath } from "@quartz-community/types"
 import { escapeHtml, emitPage } from "./shared/page-shell.ts"
-// brain-plugins' own zero-dependency Markdown renderer — NOT unified/remark/rehype.
+// This package's own zero-dependency Markdown renderer — NOT unified/remark/rehype.
 // Those were resolved out of Quartz's own node_modules, which broke: a fresh clone of
 // upstream Quartz no longer declares `rehype-stringify` (or any hast-to-html package)
 // as a direct dependency, so that import throws ERR_MODULE_NOT_FOUND at build time.
@@ -29,8 +29,9 @@ import { escapeHtml, emitPage } from "./shared/page-shell.ts"
 // fixed while building the Warp Brain Generator's site scaffolding (a fresh Quartz
 // clone reproduced it immediately); backported here rather than left on the old
 // approach, which only kept working in this repo because rehype-stringify happened
-// to already be a tracked dependency here. See brain-plugins/markdown/render.mjs's
-// own banner for the full story.
+// to already be a tracked dependency there. See this package's
+// src/lib/markdown/render.mjs (imported below as
+// @loomery/brain-site/lib/markdown/render.mjs) and its own banner for the full story.
 import { renderMarkdown } from "@loomery/brain-site/lib/markdown/render.mjs"
 import { resolveTimelineSource } from "@loomery/brain-site/config/timeline-source.mjs"
 

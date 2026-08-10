@@ -144,7 +144,8 @@ plugins:
   # --- Brain-specific plugins ---
   # Emits /onboarding and /onboarding/<role>: a Mermaid flowchart of the role's
   # reading path plus an ordered link list. Built from `roles`/`onboarding`
-  # frontmatter via brain-plugins/onboarding/paths.mjs. No `order` needed: it
+  # frontmatter via this package's own src/lib/onboarding/paths.mjs, imported as
+  # @loomery/brain-site/lib/onboarding/paths.mjs. No `order` needed: it
   # writes independent files and depends on no other emitter.
   # Note: `quartz plugin install --from-config` reports "build failed" for this
   # entry. Harmless — the installer tries npm install/build against local plugins

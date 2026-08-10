@@ -49,3 +49,34 @@ test("--docs followed by another flag exits non-zero and names the flag", () => 
   assert.notEqual(code, 0)
   assert.match(stderr, /--docs/)
 })
+
+test("validate takes its docs root from brain-site.yaml's content: key", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brain-site-content-"))
+  fs.writeFileSync(path.join(dir, "brain-site.yaml"), "pageTitle: Acme\ncontent: notes\n")
+  fs.mkdirSync(path.join(dir, "notes"))
+  fs.writeFileSync(path.join(dir, "notes", "a.md"), "---\naudience: [internal]\n---\n# A\n")
+  const { code, stdout } = run(["validate"], { cwd: dir })
+  assert.equal(code, 0)
+  assert.match(stdout, /1 docs validated/)
+})
+
+test("--docs still overrides brain-site.yaml's content:", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brain-site-override-"))
+  fs.writeFileSync(path.join(dir, "brain-site.yaml"), "content: notes\n")
+  fs.mkdirSync(path.join(dir, "notes"))
+  fs.writeFileSync(path.join(dir, "notes", "a.md"), "---\ntitle: no audience\n---\n")
+  const other = path.join(dir, "elsewhere")
+  fs.mkdirSync(other)
+  fs.writeFileSync(path.join(other, "b.md"), "---\naudience: [internal]\n---\n# B\n")
+  const { code, stdout } = run(["validate", "--docs", other], { cwd: dir })
+  assert.equal(code, 0)
+  assert.match(stdout, /1 docs validated/)
+})
+
+test("with no brain-site.yaml, validate falls back to docs/ and says so when missing", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brain-site-fallback-"))
+  const { code, stderr } = run(["validate"], { cwd: dir })
+  assert.equal(code, 1)
+  assert.match(stderr, /docs directory not found/)
+  assert.match(stderr, /fell back to "docs"/)
+})

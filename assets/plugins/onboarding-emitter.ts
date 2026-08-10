@@ -6,8 +6,10 @@
 // fallback if `click` is inert, and the keyboard/screen-reader-accessible path,
 // since Mermaid nodes are not focusable controls).
 //
-// The path-building logic (topological sort, depth, cycle detection) lives in
-// brain-plugins/onboarding/paths.mjs and is consumed here, never reimplemented.
+// The path-building logic (topological sort, depth, cycle detection) lives in this
+// package's src/lib/onboarding/paths.mjs — imported below as
+// @loomery/brain-site/lib/onboarding/paths.mjs — and is consumed here, never
+// reimplemented.
 //
 // --- Why this writes HTML by hand instead of reusing Quartz's own renderPage ---
 //
@@ -40,7 +42,7 @@
 //   - Node builtins (fs, path)
 //   - @quartz-community/types (type-only — erased, so its own unresolvable
 //     internal imports never execute)
-//   - brain-plugins/onboarding/paths.mjs (zero-dependency, plain .mjs)
+//   - @loomery/brain-site/lib/onboarding/paths.mjs (zero-dependency, plain .mjs)
 //   - the *data* Quartz already hands to any emitter: `ctx.hashedResourceNames`
 //     (the real, possibly content-hashed index.css/prescript.js/postscript.js
 //     filenames) and the `resources: StaticResources` argument (the aggregated
@@ -60,9 +62,10 @@
 
 import type { QuartzEmitterPlugin, FilePath } from "@quartz-community/types"
 
-// brain-plugins/ is deliberately outside .brain-site/ — a tested, dependency-free path
-// builder, kept out of the Quartz tree so it survives an engine upgrade and is
-// consumed as-is here, never reimplemented.
+// Resolved from this package's installed node_modules, deliberately not from anywhere
+// inside .brain-site/ — a tested, dependency-free path builder, kept out of the
+// generated Quartz tree so it survives an engine upgrade (and a `rm -rf .brain-site`)
+// and is consumed as-is here, never reimplemented.
 import { buildRolePath, listRoles } from "@loomery/brain-site/lib/onboarding/paths.mjs"
 import { escapeHtml, emitPage } from "./shared/page-shell.ts"
 

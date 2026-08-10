@@ -23,9 +23,12 @@ test("an unknown key inside sections.timeline is rejected", () => {
   assert.match(errors[0], /colour/)
 })
 
-test("extraPlugins is accepted as the declared escape hatch", () => {
-  const { ok } = validateOverride({ extraPlugins: "./plugins-local" })
-  assert.equal(ok, true)
+// extraPlugins was validated and then read by nothing at all: a brain that set it got
+// exit 0 and no plugin. Failing loudly as an unknown key beats accepting-and-discarding.
+test("extraPlugins is rejected as an unknown key — no code reads it", () => {
+  const { ok, errors } = validateOverride({ extraPlugins: "./plugins-local" })
+  assert.equal(ok, false)
+  assert.match(errors[0], /extraPlugins/)
 })
 
 test("pageTitle must be a string", () => {

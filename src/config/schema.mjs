@@ -2,9 +2,13 @@
 //
 // Deliberately an allowlist rather than a permissive merge: an unrecognised key is
 // almost always a typo or a brain quietly forking the skin, and both should be loud.
-// `extraPlugins` is the one declared escape hatch — see design doc §2.2.
+//
+// There is deliberately no brain-local plugin key here. An earlier `extraPlugins` was
+// validated and then read by nothing at all, so a brain that set it got exit 0 and no
+// plugin. Failing loudly as an unknown key beats accepting-and-discarding; a real
+// brain-local plugin hook is tracked as a follow-up.
 
-const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "extraPlugins", "static"])
+const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "static"])
 const SECTIONS = new Set(["timeline"])
 const TIMELINE = new Set(["source", "route"])
 
@@ -30,7 +34,6 @@ export function validateOverride(override) {
 
   checkStringField(config.pageTitle, "pageTitle", errors)
   checkStringField(config.content, "content", errors)
-  checkStringField(config.extraPlugins, "extraPlugins", errors)
   checkStringField(config.static, "static", errors)
 
   const sections = config.sections

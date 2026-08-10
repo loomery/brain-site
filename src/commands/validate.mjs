@@ -119,13 +119,14 @@ function toSlug(filePath, docsRoot) {
   return rel.slice(0, -extname(rel).length)
 }
 
-export function runValidate({ docsRoot }) {
+export function runValidate({ docsRoot, sourceHint = null }) {
   let files
   try {
     files = walk(docsRoot)
   } catch (err) {
     if (err.code === "ENOENT") {
       console.error(`brain-site: docs directory not found: ${docsRoot}`)
+      if (sourceHint) console.error(`brain-site: ${sourceHint}`)
       return 1
     }
     throw err

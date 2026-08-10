@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mergeConfig } from "../src/config/merge.mjs"
+import { mergeConfig, TIMELINE_DEFAULTS } from "../src/config/merge.mjs"
 
 const base = () => ({
   configuration: { pageTitle: "{{PROJECT_NAME}} Brain", baseUrl: "localhost:8080" },
@@ -41,8 +41,15 @@ test("declaring sections.timeline enables it and passes its options through", ()
   assert.deepEqual(timeline.options, { source: "../sessions", route: "/changelog" })
 })
 
+// The default source is brain-root-relative ("logs"), the same value setup.mjs resolves
+// against the brain root — there is exactly one copy of these defaults, exported from
+// merge.mjs and imported by setup.mjs.
 test("timeline source and route fall back to their defaults", () => {
   const merged = mergeConfig(base(), { sections: { timeline: {} } })
   const timeline = merged.plugins.find((p) => p.source.includes("logs-timeline-emitter"))
-  assert.deepEqual(timeline.options, { source: "../logs", route: "/logs" })
+  assert.deepEqual(timeline.options, { source: "logs", route: "/logs" })
+})
+
+test("the exported timeline defaults are the single source of truth", () => {
+  assert.deepEqual(TIMELINE_DEFAULTS, { source: "logs", route: "/logs" })
 })

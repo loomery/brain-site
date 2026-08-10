@@ -5,7 +5,10 @@
 // readable and diffable when a page renders wrong — see design doc §2.5.
 
 const TIMELINE_PLUGIN = "logs-timeline-emitter"
-const TIMELINE_DEFAULTS = { source: "../logs", route: "/logs" }
+// The single source of truth for the timeline defaults. `source` is brain-root-relative
+// ("logs"), matching what setup resolves against rootDir — an earlier "../logs" here was
+// a relic of the old site/ layout and disagreed with setup.mjs.
+export const TIMELINE_DEFAULTS = { source: "logs", route: "/logs" }
 
 function clone(value) {
   return structuredClone(value)

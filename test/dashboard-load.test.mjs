@@ -49,11 +49,26 @@ test("a valid facts file is parsed", () => {
   assert.deepEqual(warnings, [])
 })
 
-test("unquoted ISO dates arrive as Date objects, which the schema still accepts", () => {
+// yaml@2's default parse uses the YAML 1.2 core schema, which does not resolve
+// a timestamp-shaped scalar to a Date — so an unquoted date arrives as a plain
+// string, same as a quoted one. normalizeDate's Date branch is defensive for a
+// caller that constructs one directly (the model layer's own tests do this),
+// not because this parser ever produces one.
+test("unquoted and quoted ISO dates both arrive as strings and validate cleanly", () => {
   const dir = tmpDir("load-dates")
   fs.writeFileSync(path.join(dir, "dashboard.yaml"), "end: 2026-09-14\n")
   const { facts, warnings } = loadDashboardFiles(paths(dir))
-  assert.ok(facts.end instanceof Date)
+  assert.equal(typeof facts.end, "string")
+  assert.equal(facts.end, "2026-09-14")
+  assert.deepEqual(warnings, [])
+})
+
+test("a quoted ISO date is equivalent to an unquoted one", () => {
+  const dir = tmpDir("load-dates-quoted")
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), 'end: "2026-09-14"\n')
+  const { facts, warnings } = loadDashboardFiles(paths(dir))
+  assert.equal(typeof facts.end, "string")
+  assert.equal(facts.end, "2026-09-14")
   assert.deepEqual(warnings, [])
 })
 

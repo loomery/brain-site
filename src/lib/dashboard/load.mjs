@@ -48,14 +48,17 @@ function readYamlFile(filePath, label, warnings) {
 
   let parsed
   try {
-    // yaml's default parse uses the YAML 1.2 core schema, which does NOT
-    // resolve an unquoted `2026-08-05` to a Date — only YAML 1.1's timestamp
-    // tag does that. dates.mjs and schema.mjs already assume Date | string
-    // for every date field (see dates.mjs's own banner), so this option is
-    // what actually delivers the Date half of that union; without it, an
-    // unquoted date is just a plain string and normalizeDate's Date branch is
-    // dead code.
-    parsed = YAML.parse(raw, { version: "1.1" })
+    // Deliberately the default (YAML 1.2 core schema) options, not `version:
+    // "1.1"`. 1.2 core does not resolve an unquoted `2026-08-05` to a Date —
+    // every date arrives as a plain string — but that's the safer choice: 1.1
+    // also reinterprets `012` as octal 10, `yes`/`off` as booleans, and a key
+    // literally named `off` as the boolean key `false`. Loud beats silent —
+    // under 1.2 a brain that writes `done: yes` gets a clear "must be a
+    // boolean" from schema.mjs; under 1.1 it would silently coerce to `true`.
+    // normalizeDate's Date branch is defensive for a caller that constructs
+    // one directly (the model layer's own tests do this), not because this
+    // parser ever produces one.
+    parsed = YAML.parse(raw)
   } catch (err) {
     warnings.push(`could not parse ${label}: ${err.message}`)
     return null

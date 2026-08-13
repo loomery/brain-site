@@ -38,6 +38,7 @@
 | `assets/plugins/dashboard/summary.ts` … `explore.ts` | One file per module (12). |
 | `assets/plugins/dashboard/index.ts` | The ordered module registry. |
 | `assets/styles/_dashboard.scss` | Cards, fisheye, people grid, collapsed-chrome grid override. |
+| `assets/skills/dashboard/SKILL.md` | The bundled skill telling an agent how to regenerate `dashboard.status.yaml`. |
 | `test/dashboard-dates.test.mjs` | Date helpers. |
 | `test/dashboard-schema.test.mjs` | Both validators. |
 | `test/dashboard-model.test.mjs` | Derivation, including every fisheye edge case. |
@@ -5612,7 +5613,301 @@ EOF
 
 ---
 
-### Task 15: Document and release v1.4.0
+### Task 15: Ship the `dashboard` skill
+
+A skill that tells an AI how to regenerate `dashboard.status.yaml`, bundled with the package so every brain gets it from the same dependency that gives it the skin.
+
+**How it reaches a brain — and why there is no copy step.** A brain's `.claude/skills` is a *tracked git symlink* to its own `skills/` directory (mode `120000`, confirmed on Secret Escapes). So `setup` cannot install a skill by copying: writing through that symlink writes tracked files, which `setup` must never do. Instead:
+
+- The package ships `assets/skills/dashboard/`. `package.json`'s `files` array already includes `assets`, so `npm i` puts it at `node_modules/@loomery/brain-site/assets/skills/dashboard/` with no work.
+- Each brain opts in **once**, with a tracked symlink it commits itself:
+  `skills/dashboard -> ../node_modules/@loomery/brain-site/assets/skills/dashboard`
+- That resolves through the brain's existing `.claude/skills -> ../skills`, so Claude Code finds it at `.claude/skills/dashboard`, and `npm update @loomery/brain-site` refreshes its content with no further action.
+
+The skill propagates exactly the way the skin does. `setup` only *detects* the missing symlink and prints how to add it — it never creates it.
+
+**Files:**
+- Create: `assets/skills/dashboard/SKILL.md`
+- Modify: `src/commands/setup.mjs` (hint when the symlink is absent)
+- Test: `test/setup-units.test.mjs`
+
+**Interfaces:**
+- Consumes: `DASHBOARD_FACTS_FILE`, `DASHBOARD_STATUS_FILE` from `src/config/merge.mjs`.
+- Produces: `checkDashboardSkillLink(rootDir) => boolean` — exported from `setup.mjs` for tests, alongside the existing exports. Returns `true` when the brain has the symlink (or has no `skills/` directory at all, so the hint is not relevant), `false` when a `skills/` directory exists without it. Never throws, never writes.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `test/setup-units.test.mjs`:
+
+```js
+// --- dashboard skill link detection ----------------------------------------
+//
+// setup must never create this symlink: it lands in the brain's tracked
+// skills/ directory (via the tracked .claude/skills -> ../skills symlink), and
+// setup writes nothing tracked. It only detects and hints.
+
+import { checkDashboardSkillLink } from "../src/commands/setup.mjs"
+
+test("reports missing when a skills directory exists without the dashboard link", () => {
+  const dir = tmpDir("skilllink-missing")
+  fs.mkdirSync(path.join(dir, "skills", "brain"), { recursive: true })
+  assert.equal(checkDashboardSkillLink(dir), false)
+})
+
+test("reports present when the dashboard skill is linked", () => {
+  const dir = tmpDir("skilllink-present")
+  fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+  fs.symlinkSync("../node_modules/@loomery/brain-site/assets/skills/dashboard", path.join(dir, "skills", "dashboard"))
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("reports present when the brain has a real dashboard skill directory of its own", () => {
+  const dir = tmpDir("skilllink-own")
+  fs.mkdirSync(path.join(dir, "skills", "dashboard"), { recursive: true })
+  // A brain that wrote its own dashboard skill has opted out of the shared one;
+  // nagging it would be wrong.
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("reports present when the brain has no skills directory at all", () => {
+  const dir = tmpDir("skilllink-noskills")
+  // Not every consumer is a brain-shaped repo with skills/. Nothing to hint at.
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("detection never throws on a broken symlink", () => {
+  const dir = tmpDir("skilllink-broken")
+  fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+  fs.symlinkSync("./nowhere-at-all", path.join(dir, "skills", "dashboard"))
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `node --test test/setup-units.test.mjs`
+Expected: FAIL — `checkDashboardSkillLink` is not exported.
+
+- [ ] **Step 3a: Write `assets/skills/dashboard/SKILL.md`**
+
+```markdown
+---
+name: dashboard
+description: >-
+  Regenerate a project brain's dashboard status — the RAG rating, what needs
+  attention, recent decisions, who is working on what, and the "since you last
+  looked" summary shown on the brain site's home page. Use whenever `/brain
+  sync` runs, whenever asked to update or refresh the dashboard, and whenever
+  new project context has just been ingested and the home page would now be
+  out of date.
+---
+
+# Updating a brain's dashboard
+
+The brain site's home page (`/`) reads two files at the repository root. They have
+different owners, and the whole value of the dashboard rests on not confusing them.
+
+| File | Owner | Your permission |
+| --- | --- | --- |
+| `dashboard.yaml` | Humans | **Read only.** Never write to it. |
+| `dashboard.status.yaml` | You | Regenerate wholesale. |
+
+`dashboard.yaml` holds ground truth: the engagement's start and end dates, its
+milestones, its phases, the people roster, days sold. Those are commitments someone
+made deliberately. If you believe one is wrong or stale — a milestone slipped, a
+person left — **say so and propose the edit; do not make it.** A dashboard whose
+dates an agent quietly rewrote is worth nothing.
+
+`dashboard.status.yaml` is yours. Rewrite it completely each time rather than
+patching it, so a stale entry from three syncs ago cannot survive.
+
+## Before you write anything
+
+1. **Read `dashboard.yaml`** — you need the milestone list and the people roster.
+   Every name in your `people:` block must match a `name:` in that roster exactly.
+   A name that matches nothing is a validation error, not a new person.
+2. **Read the brain's own docs** — whatever the brain's playbook lists as its
+   grounded context (typically an engagement doc, stakeholders, meeting notes,
+   session logs). Everything you write must trace to one of them.
+3. **Find the previous `generatedAt`** in the existing `dashboard.status.yaml`, if
+   there is one. That date becomes your `since:`, and the window it opens is what
+   the `delta:` field summarises.
+
+## What to write
+
+Every field is optional. **Omit a field you cannot ground rather than filling it
+with something plausible.** An absent module is honest; an invented one is not, and
+the page labels this file's output as `assessed` precisely so a reader can weigh it.
+
+```yaml
+generatedAt: 2026-08-13        # today
+since: 2026-08-06              # the previous generatedAt
+
+status:
+  rag: amber                   # green | amber | red
+  headline: One line on why it is that colour
+
+delta: |
+  What changed since `since:`. Two to four sentences, concrete and dated.
+  This is the most-read thing on the page — write it for someone returning
+  after a week away, not as a changelog.
+
+attention:                     # what a human needs to act on
+  - text: Short label
+    detail: why it matters and who is holding it
+    severity: high             # high | medium | low
+
+decisions:                     # what got settled, so it is not re-litigated
+  - { text: What was decided, by: Who, date: 2026-08-06 }
+
+people:                        # names MUST match dashboard.yaml's roster
+  - name: Milly Allatson
+    focus: What they are on right now
+    detail: the specific open thread
+    state: on-track            # on-track | awaiting | blocked | idle
+
+keyReads:                      # 3-5 docs a newcomer should read first
+  - { slug: engagement, why: one line on why this one }
+
+sources:                       # what this brain is wired to
+  - { name: Slack, state: wired }        # wired | partial | absent
+  - { name: Miro, state: partial, note: why it is only partial }
+```
+
+### Choosing a RAG rating
+
+Rate delivery risk, not mood. `green` — nothing needs a decision this week.
+`amber` — something is slipping or unresolved and a human should look. `red` — a
+date or commitment is already at risk. Put the *reason* in `headline`, not a
+restatement of the colour; "Amber" beside "Some risks exist" tells a reader
+nothing.
+
+### Severity
+
+`high` is for things blocking other work or with a date attached. `medium` needs
+attention but nothing is waiting on it. `low` is a known gap worth recording.
+If everything is `high`, nothing is.
+
+### Person state
+
+`blocked` means they cannot proceed — always pair it with what they are waiting
+on, in `detail`. `awaiting` means someone else holds the next move. `idle` means no
+open action, which is information, not criticism. Omit `people:` entirely rather
+than guessing what someone is doing.
+
+## Where the content comes from
+
+Read from whatever the brain actually has wired — its playbook lists the sources.
+In practice: meeting notes give you decisions and who owns what; team channels give
+you blockers and the current week's focus; session logs give you what changed. A
+project tracker (Linear, Jira) is the best source for `people:` when the brain has
+one — read open issues per assignee and summarise each person's current focus.
+
+Nothing is read at build time. The site build is offline and has no credentials, so
+whatever you write here is exactly what the page will show until the next sync. If
+you cannot reach a source, say which one in the relevant `sources:` note rather
+than silently writing a status that looks fresher than it is.
+
+## Finish
+
+Validate before you finish:
+
+```bash
+npx brain-site validate
+```
+
+It checks both files against an allowlist — an unknown key, a bad enum value, or a
+`people:` name missing from the roster is an error. Fix what it reports; do not
+leave a file that fails validation, because the site build will silently drop the
+affected module rather than failing.
+
+Then say what you changed: the new RAG rating and why, anything added to or cleared
+from `attention:`, and any `dashboard.yaml` edit you are proposing but did not make.
+```
+
+- [ ] **Step 3b: Add the hint to `src/commands/setup.mjs`**
+
+Add the constant and the check:
+
+```js
+const DASHBOARD_SKILL_LINK = path.join("skills", "dashboard")
+
+// Detects whether the brain has linked this package's `dashboard` skill. Never
+// creates it: the link lands in the brain's *tracked* skills/ directory (a
+// brain's .claude/skills is itself a tracked symlink to ../skills), and setup
+// writes nothing tracked — same boundary that keeps it out of .gitignore and the
+// root package.json.
+//
+// Returns true for "nothing to say": already linked, the brain wrote its own
+// dashboard skill, or this repo has no skills/ directory at all.
+export function checkDashboardSkillLink(rootDir) {
+  const skillsDir = path.join(rootDir, "skills")
+  try {
+    if (!fs.statSync(skillsDir).isDirectory()) return true
+  } catch {
+    return true
+  }
+  // lstat, not stat: a symlink pointing at a not-yet-installed node_modules path
+  // is still the brain having opted in, and stat would call that missing.
+  try {
+    fs.lstatSync(path.join(rootDir, DASHBOARD_SKILL_LINK))
+    return true
+  } catch {
+    return false
+  }
+}
+```
+
+Call it at the end of `runSetup`, just before the final `log(...)`/return, so the hint is the last thing on screen rather than buried in `npm i` output:
+
+```js
+  if (!checkDashboardSkillLink(rootDir)) {
+    log(
+      "tip: this brain has a skills/ directory but has not linked the shared " +
+        "`dashboard` skill, which tells an agent how to regenerate " +
+        `${DASHBOARD_STATUS_FILE}. To add it (one tracked symlink, committed by you):\n` +
+        "  ln -s ../node_modules/@loomery/brain-site/assets/skills/dashboard skills/dashboard\n" +
+        "Then reference it from your brain skill's sync procedure.",
+    )
+  }
+```
+
+Add `checkDashboardSkillLink` to the existing `export { ... }` block at the bottom of the file, and import `DASHBOARD_STATUS_FILE` from `../config/merge.mjs` alongside the existing `mergeConfig, TIMELINE_DEFAULTS` import.
+
+- [ ] **Step 4: Run tests**
+
+Run: `node --test`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add assets/skills src/commands/setup.mjs test/setup-units.test.mjs
+git commit -m "$(cat <<'EOF'
+feat: ship a `dashboard` skill telling agents how to update the status file
+
+Bundled in assets/, which package.json's `files` already ships, so it arrives
+at node_modules/@loomery/brain-site/assets/skills/dashboard on every npm
+update. A brain opts in with one tracked symlink from its own skills/ directory
+and thereafter gets skill updates the same way it gets skin updates.
+
+setup only detects the missing link and prints the command. It never creates
+it: a brain's .claude/skills is a tracked symlink to ../skills, so installing
+through it would mean setup writing tracked files — the same boundary that
+keeps setup out of .gitignore and the root package.json.
+
+The skill's central rule is the ownership split: dashboard.yaml is read-only to
+an agent, dashboard.status.yaml is regenerated wholesale. A dashboard whose
+dates an agent quietly rewrote is worth nothing.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 16: Document and release v1.4.0
 
 **Files:**
 - Modify: `README.md`
@@ -5660,6 +5955,26 @@ which persists what it finds into `dashboard.status.yaml`.
 A build never fails over these files. A missing, malformed or invalid one warns
 and drops the affected module; `npx brain-site validate` is where it is a
 non-zero error.
+
+### Keeping the status file current
+
+This package bundles a `dashboard` skill that tells an agent how to regenerate
+`dashboard.status.yaml` — the ownership split, how to pick a RAG rating, and
+what to ground each field in. Link it once, and it updates with the skin:
+
+```bash
+ln -s ../node_modules/@loomery/brain-site/assets/skills/dashboard skills/dashboard
+```
+
+Commit that symlink. It resolves through a brain's own `.claude/skills ->
+../skills`, so Claude Code picks the skill up, and `npm update
+@loomery/brain-site` refreshes its content with nothing further to do. `setup`
+never creates the link — it lands in the brain's tracked `skills/` directory,
+and `setup` writes nothing tracked — but it does print this command when it
+notices the link is missing.
+
+Then reference the skill from your brain skill's own sync procedure, so a
+`/brain sync` refreshes the dashboard as part of the run.
 ```
 
 - [ ] **Step 2: Bump the version**
@@ -5697,4 +6012,26 @@ cd "/Users/tomholmes/Developer/Project Brains/Eque2-Chalkstring" && npm update @
 
 Expected: a successful build whose `/` shows **only the Explore module** — that brain has no dashboard files, so it gets today's page and nothing worse. Confirming this is the point of the step: it proves the skin degrades cleanly for an unseeded brain, which is the guarantee that made this a minor release.
 
-Seeding Eque2-Chalkstring, and adding `roles:` frontmatter to Secret Escapes docs so its Onboarding module becomes non-empty, are deliberate follow-ups — not part of this plan.
+- [ ] **Step 6: Link the skill in Secret Escapes and confirm the agent can see it**
+
+In the brain repository, add the symlink and commit it — this is the per-brain opt-in, and the step that proves the delivery mechanism works end to end:
+
+```bash
+cd "/Users/tomholmes/Developer/Project Brains/Secret escapes" && ln -s ../node_modules/@loomery/brain-site/assets/skills/dashboard skills/dashboard && ls -l .claude/skills/dashboard/
+```
+
+Expected: the listing resolves through both symlinks to the package's `SKILL.md`. Confirm `git status` shows one new symlink (mode `120000`), not a directory of copied files — a copy would be tracked content that `npm update` could never refresh.
+
+```bash
+cd "/Users/tomholmes/Developer/Project Brains/Secret escapes" && git add skills/dashboard && git commit -m "$(cat <<'EOF'
+feat: link the shared dashboard skill
+
+One tracked symlink into the brain-site dependency, so the skill updates with
+`npm update @loomery/brain-site` rather than being a copy that drifts.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+Seeding Eque2-Chalkstring, linking the skill there, adding `roles:` frontmatter to Secret Escapes docs so its Onboarding module becomes non-empty, and referencing the skill from each brain's own playbook §4 sync procedure are deliberate follow-ups — not part of this plan.

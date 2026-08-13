@@ -13,6 +13,9 @@ import { buildModel } from "../src/lib/dashboard/model.mjs"
 import { SummaryModule } from "../assets/plugins/dashboard/summary.ts"
 import { DeltaModule } from "../assets/plugins/dashboard/delta.ts"
 import { TimelineModule } from "../assets/plugins/dashboard/timeline.ts"
+import { NextModule } from "../assets/plugins/dashboard/next.ts"
+import { EffortModule } from "../assets/plugins/dashboard/effort.ts"
+import { PeopleModule } from "../assets/plugins/dashboard/people.ts"
 
 const TODAY = "2026-08-13"
 
@@ -172,4 +175,93 @@ test("timeline escapes a milestone name containing markup", () => {
   const html = TimelineModule.render(vmFrom(facts, null))
   assert.equal(html.includes("<b>one</b>"), false)
   assert.match(html, /&lt;b&gt;one/)
+})
+
+// --- next, effort, people --------------------------------------------------
+
+test("next is null when nothing upcoming remains", () => {
+  assert.equal(NextModule.render(vmFrom({}, null)), null)
+  const allPast = { milestones: [{ date: "2026-01-01", name: "Old" }, { date: "2026-01-02", name: "Older" }] }
+  assert.equal(NextModule.render(vmFrom(allPast, null)), null)
+})
+
+test("next lists upcoming milestones and commitments in date order with owners", () => {
+  const facts = { ...FACTS, commitments: [{ date: "2026-08-17", text: "Training published", owner: "Tom" }] }
+  const html = NextModule.render(vmFrom(facts, null))
+  assert.ok(html.indexOf("Survey due") < html.indexOf("Training published"))
+  assert.ok(html.indexOf("Training published") < html.indexOf("Hack Week"))
+  assert.match(html, /Tom/)
+  assert.match(html, /14 Aug/)
+})
+
+test("next marks the imminent item so it can be highlighted", () => {
+  const html = NextModule.render(vmFrom(FACTS, null))
+  assert.match(html, /dash-next-row--soon/)
+})
+
+test("next caps the list rather than reproducing the whole timeline", () => {
+  const milestones = Array.from({ length: 12 }, (_, i) => ({
+    date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+    name: `M${i}`,
+  }))
+  const html = NextModule.render(vmFrom({ milestones }, null))
+  assert.equal((html.match(/dash-next-row/g) ?? []).length <= 5, true)
+})
+
+test("effort is null without soldDays", () => {
+  assert.equal(EffortModule.render(vmFrom({}, null)), null)
+  assert.equal(EffortModule.render(vmFrom({ effort: { usedDays: 5 } }, null)), null)
+})
+
+test("effort renders used, in-flight and remaining days with bar widths", () => {
+  const html = EffortModule.render(vmFrom({ effort: { soldDays: 50, usedDays: 32, inFlightDays: 4 } }, null))
+  assert.match(html, /width:64%/)
+  assert.match(html, /width:8%/)
+  assert.match(html, /14/)
+  assert.match(html, /50/)
+})
+
+test("effort handles a fully consumed budget without a negative remainder", () => {
+  const html = EffortModule.render(vmFrom({ effort: { soldDays: 10, usedDays: 10, inFlightDays: 4 } }, null))
+  assert.match(html, /0 left/)
+  assert.equal(html.includes("-4"), false)
+})
+
+test("people is null without a roster", () => {
+  assert.equal(PeopleModule.render(vmFrom({}, null)), null)
+  assert.equal(PeopleModule.render(vmFrom({}, { people: [{ name: "Ghost" }] })), null)
+})
+
+test("people renders the roster even with no status, so the team is always visible", () => {
+  const facts = { people: [{ name: "Milly Allatson", role: "PM", org: "Loomery" }] }
+  const html = PeopleModule.render(vmFrom(facts, null))
+  assert.match(html, /Milly Allatson/)
+  assert.match(html, /PM/)
+  assert.match(html, /Loomery/)
+})
+
+test("people renders each person's focus, detail and state", () => {
+  const facts = { people: [{ name: "Tom Holmes", role: "Engineer", org: "Loomery" }] }
+  const status = {
+    people: [{ name: "Tom Holmes", focus: "Training content", detail: "Waiting on Efe", state: "blocked" }],
+  }
+  const html = PeopleModule.render(vmFrom(facts, status))
+  assert.match(html, /Training content/)
+  assert.match(html, /Waiting on Efe/)
+  assert.match(html, /dash-state--blocked/)
+  assert.match(html, /BLOCKED/)
+})
+
+test("people shows a person with no status as having no current focus", () => {
+  const facts = { people: [{ name: "Brett Thornton", role: "Director" }] }
+  const html = PeopleModule.render(vmFrom(facts, null))
+  assert.match(html, /Brett Thornton/)
+  assert.match(html, /No current focus recorded/)
+})
+
+test("people escapes a focus containing markup", () => {
+  const facts = { people: [{ name: "X" }] }
+  const status = { people: [{ name: "X", focus: "<img src=x>" }] }
+  const html = PeopleModule.render(vmFrom(facts, status))
+  assert.equal(html.includes("<img src=x>"), false)
 })

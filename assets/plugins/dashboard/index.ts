@@ -9,11 +9,17 @@ import type { DashboardModule } from "./types.ts"
 import { SummaryModule } from "./summary.ts"
 import { DeltaModule } from "./delta.ts"
 import { TimelineModule } from "./timeline.ts"
+import { NextModule } from "./next.ts"
+import { EffortModule } from "./effort.ts"
+import { PeopleModule } from "./people.ts"
 import { ExploreModule } from "./explore.ts"
 
 export const MODULES: DashboardModule[] = [
   SummaryModule,
   DeltaModule,
   TimelineModule,
+  NextModule,
+  EffortModule,
+  PeopleModule,
   ExploreModule,
 ]

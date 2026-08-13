@@ -55,6 +55,14 @@ interface DashboardOptions {
 interface PageItem {
   slug: string
   title: string
+  // True when `title` was derived from the slug via humanize() rather than
+  // taken verbatim from frontmatter. A renderer cannot safely tell the two
+  // apart by inspecting `title` alone — humanize() strips hyphens, so running
+  // it again on a genuine frontmatter title like "AI-led pillar" would mangle
+  // it into "AI led pillar". This flag is how later modules (the recently-
+  // updated docs list, brain-health counts) recover that provenance without
+  // re-deriving anything.
+  titleIsDerived: boolean
   filePath: string | null
 }
 
@@ -63,7 +71,9 @@ type QuartzContent = [unknown, { data: Record<string, unknown> }]
 const RECENT_DOC_LIMIT = 3
 const RECENT_LOG_LIMIT = 3
 
-function adaptContent(content: QuartzContent[]): PageItem[] {
+// Exported so tests can assert on `titleIsDerived` directly (it isn't
+// observable from the rendered HTML, which only ever shows `title`).
+export function adaptContent(content: QuartzContent[]): PageItem[] {
   const items: PageItem[] = []
   for (const [, file] of content) {
     const data = file.data
@@ -71,13 +81,14 @@ function adaptContent(content: QuartzContent[]): PageItem[] {
     if (!slug) continue
     if (data.unlisted === true) continue
     const fm = data.frontmatter as Record<string, unknown> | undefined
+    const hasFrontmatterTitle = typeof fm?.title === "string" && fm.title.length > 0
     // A page with no frontmatter title falls back to its own slug, humanised
     // the same way explore.ts already humanises folder names — a raw slug
-    // ("product-context") reads as a filename, not a title.
-    const title =
-      typeof fm?.title === "string" && fm.title.length > 0 ? fm.title : humanize(slug)
+    // ("product-context") reads as a filename, not a title. titleIsDerived
+    // records which case this was, since `title` alone doesn't say.
+    const title = hasFrontmatterTitle ? (fm!.title as string) : humanize(slug)
     const filePath = typeof data.filePath === "string" ? data.filePath : null
-    items.push({ slug, title, filePath })
+    items.push({ slug, title, titleIsDerived: !hasFrontmatterTitle, filePath })
   }
   return items
 }
@@ -91,18 +102,24 @@ function hasRootIndex(items: PageItem[]): boolean {
 function recentDocs(
   pages: PageItem[],
   opts: DashboardOptions,
-): Array<{ slug: string; title: string; date: string }> {
+): Array<{ slug: string; title: string; titleIsDerived: boolean; date: string }> {
   const rootDir = opts.rootDir
   const contentDir = opts.contentDir
   if (!rootDir || !contentDir) return []
 
-  const dated: Array<{ slug: string; title: string; date: string }> = []
+  const dated: Array<{ slug: string; title: string; titleIsDerived: boolean; date: string }> = []
   for (const page of pages) {
     if (page.slug === "index") continue
     const rel = page.filePath ?? `${page.slug}.md`
     const abs = path.isAbsolute(rel) ? rel : path.join(contentDir, rel)
     const date = gitDateFor(rootDir, abs)
-    if (date !== null) dated.push({ slug: page.slug, title: page.title, date })
+    if (date !== null)
+      dated.push({
+        slug: page.slug,
+        title: page.title,
+        titleIsDerived: page.titleIsDerived,
+        date,
+      })
   }
 
   return dated

@@ -11,7 +11,7 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { DashboardEmitter } from "../assets/plugins/dashboard-emitter.ts"
+import { DashboardEmitter, adaptContent } from "../assets/plugins/dashboard-emitter.ts"
 import { __resetDonorChromeCacheForTests } from "../assets/plugins/shared/page-shell.ts"
 
 // page-shell.ts caches its chosen chrome donor once per process (deliberate for
@@ -93,6 +93,34 @@ test("the explore module humanises a slug with no frontmatter title", async () =
   assert.match(html, /Product context/)
 })
 
+// A humanised fallback title is a display convenience, not the truth — a
+// frontmatter title must survive verbatim (humanize() would mangle a real
+// hyphenated title like "AI-led pillar"), and later modules (recently-updated
+// docs, brain-health counts) need to tell the two cases apart without
+// re-deriving anything. adaptContent is exported for exactly this: the flag
+// isn't observable from rendered HTML, which only ever shows the display value.
+test("a frontmatter title survives verbatim and is not flagged as derived", async () => {
+  const content = [[{}, { data: { slug: "ai-led-pillar", frontmatter: { title: "AI-led pillar" } } }]]
+  const pages = adaptContent(content)
+  assert.equal(pages[0].title, "AI-led pillar")
+  assert.equal(pages[0].titleIsDerived, false)
+
+  const dir = tmpDir("dash-title-verbatim")
+  const { html } = await emitTo(dir, { content })
+  assert.match(html, /AI-led pillar/)
+})
+
+test("a slug with no frontmatter title is flagged as derived", async () => {
+  const content = [[{}, { data: { slug: "product-context", frontmatter: {} } }]]
+  const pages = adaptContent(content)
+  assert.equal(pages[0].title, "Product context")
+  assert.equal(pages[0].titleIsDerived, true)
+
+  const dir = tmpDir("dash-title-derived")
+  const { html } = await emitTo(dir, { content })
+  assert.match(html, /Product context/)
+})
+
 test("Quartz's own tags/ folder is excluded from sections", async () => {
   const dir = tmpDir("dash-tags")
   const { html } = await emitTo(dir)
@@ -111,11 +139,25 @@ test("an unlisted page is excluded", async () => {
 
 test("it never picks its own index.html as its chrome donor", async () => {
   const dir = tmpDir("dash-donor")
-  // A chrome-less index.html left by a previous build. If it were accepted as a
-  // donor, the emitted page would have empty sidebars.
-  fs.writeFileSync(path.join(dir, "index.html"), "<!DOCTYPE html><html><body></body></html>")
+  // A stale index.html left by a previous build — usable chrome (both sidebar
+  // divs present, so extractChromeFromHtml would happily accept it), but
+  // marked "STALE" so it is distinguishable from the legitimate donor
+  // (engagement.html, seeded by emitTo with the "tree" marker). A chrome-less
+  // stub would pass this test even with donorExclude removed, since
+  // extractChromeFromHtml rejects that regardless of exclusion — it wouldn't
+  // exercise the mechanism at all. listDonorSlugs sorts "index" first, so if
+  // the exclusion were ever dropped, index.html's STALE chrome would win.
+  fs.writeFileSync(
+    path.join(dir, "index.html"),
+    `<!DOCTYPE html><html><head></head><body>
+<div class="left sidebar"><div id="explorer">STALE</div></div>
+<div class="center">stale content</div>
+<div class="right sidebar"><div id="graph-container">STALE</div></div>
+</body></html>`,
+  )
   const { html } = await emitTo(dir)
   assert.match(html, /<div class="left sidebar"><div id="explorer">tree<\/div><\/div>/)
+  assert.equal(html.includes("STALE"), false)
 })
 
 test("the page heading falls back to pageTitle with no dashboard.yaml", async () => {

@@ -77,8 +77,10 @@ function checkString(value, label, errors, { required = false } = {}) {
     if (required) errors.push(`${label} is required`)
     return
   }
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string") {
     errors.push(`${label} must be a string, got ${describeType(value)}`)
+  } else if (value.length === 0) {
+    errors.push(`${label} must not be empty`)
   }
 }
 

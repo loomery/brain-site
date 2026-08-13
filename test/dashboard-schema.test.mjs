@@ -55,6 +55,12 @@ test("a wrong-typed facts field is an error", () => {
   assert.match(errors[0], /project must be a string, got number/)
 })
 
+test("an empty-string facts field is an error naming emptiness, not its type", () => {
+  const { ok, errors } = validateFacts({ project: "" })
+  assert.equal(ok, false)
+  assert.match(errors[0], /project must not be empty/)
+})
+
 test("milestones must be an array of objects", () => {
   assert.equal(validateFacts({ milestones: "Kickoff" }).ok, false)
   assert.equal(validateFacts({ milestones: ["Kickoff"] }).ok, false)

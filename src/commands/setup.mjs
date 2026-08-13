@@ -488,10 +488,10 @@ function resolveOverridePaths(rootDir, override) {
   return resolved
 }
 
-function writeConfig(generatedDir, resolvedOverride) {
+function writeConfig(generatedDir, resolvedOverride, rootDir) {
   const basePath = path.join(assetsDir, "quartz.config.base.yaml")
   const base = YAML.parse(fs.readFileSync(basePath, "utf8"))
-  const merged = mergeConfig(base, resolvedOverride ?? {})
+  const merged = mergeConfig(base, resolvedOverride ?? {}, rootDir)
   fs.writeFileSync(path.join(generatedDir, "quartz.config.yaml"), YAML.stringify(merged))
   return merged
 }
@@ -541,7 +541,7 @@ export async function runSetup({ rootDir, then }) {
   vendorQuartz(generatedDir)
   copyPackageAssets(generatedDir)
   if (!copyBrainStatic(generatedDir, resolvedOverride)) return 1
-  writeConfig(generatedDir, resolvedOverride)
+  writeConfig(generatedDir, resolvedOverride, rootDir)
 
   installAndConfigurePlugins(generatedDir)
 

@@ -1,0 +1,7 @@
+project: Fixture Brain
+start: 2026-07-01
+end: 2026-09-30
+milestones:
+  - { date: 2026-07-10, name: Alpha, done: true }
+  - { date: 2026-08-20, name: Beta }
+  - { date: 2026-09-10, end: 2026-09-12, name: Gamma, owner: Ada }

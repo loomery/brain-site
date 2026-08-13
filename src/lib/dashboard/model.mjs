@@ -337,7 +337,7 @@ export function buildTimeline(facts, today) {
   }
 }
 
-export function buildModel({ facts, status, pageTitle, pages, activity, today }) {
+export function buildModel({ facts, status, pageTitle, pages, activity, onboarding, today }) {
   const rag =
     status?.status?.rag !== undefined || status?.status?.headline !== undefined
       ? {
@@ -370,6 +370,7 @@ export function buildModel({ facts, status, pageTitle, pages, activity, today })
     keyReads: asArray(status?.keyReads),
     sources: asArray(status?.sources),
     activity: activity ?? { logs: [], docs: [] },
+    onboarding: onboarding ?? [],
     pages: pages ?? [],
   }
 }

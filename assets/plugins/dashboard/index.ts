@@ -15,6 +15,7 @@ import { PeopleModule } from "./people.ts"
 import { AttentionModule } from "./attention.ts"
 import { DecisionsModule } from "./decisions.ts"
 import { ActivityModule } from "./activity.ts"
+import { OnboardingModule } from "./onboarding.ts"
 import { HealthModule } from "./health.ts"
 import { ExploreModule } from "./explore.ts"
 
@@ -28,6 +29,7 @@ export const MODULES: DashboardModule[] = [
   AttentionModule,
   DecisionsModule,
   ActivityModule,
+  OnboardingModule,
   HealthModule,
   ExploreModule,
 ]

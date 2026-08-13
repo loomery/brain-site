@@ -219,3 +219,107 @@ test("a brain that has never written the dashboard files produces no warnings", 
     [],
   )
 })
+
+test("the emitter derives onboarding role counts from roles frontmatter", async () => {
+  const dir = tmpDir("dash-onboarding")
+  const content = [
+    [
+      {},
+      {
+        data: {
+          slug: "engagement",
+          frontmatter: {
+            title: "Engagement",
+            roles: ["engineering"],
+            onboarding: { order: 1 },
+          },
+        },
+      },
+    ],
+    [
+      {},
+      {
+        data: {
+          slug: "stakeholders",
+          frontmatter: {
+            title: "Stakeholders",
+            roles: ["engineering", "product"],
+            onboarding: { order: 2, prerequisites: ["engagement"] },
+          },
+        },
+      },
+    ],
+  ]
+  const { html } = await emitTo(dir, { content })
+  assert.match(html, /href="\/onboarding\/engineering"/)
+  assert.match(html, /href="\/onboarding\/product"/)
+})
+
+test("no onboarding module appears when no doc declares a role", async () => {
+  const dir = tmpDir("dash-no-onboarding")
+  const { html } = await emitTo(dir)
+  assert.equal(html.includes("/onboarding"), false)
+})
+
+import { fileURLToPath } from "node:url"
+
+const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url))
+
+async function emitFixture(name, dirPrefix) {
+  const dir = tmpDir(dirPrefix)
+  fs.writeFileSync(path.join(dir, "engagement.html"), donorPageHtml())
+  await DashboardEmitter({
+    pageTitle: "Fixture Brain",
+    facts: path.join(FIXTURES, name, "dashboard.yaml"),
+    status: path.join(FIXTURES, name, "dashboard.status.yaml"),
+  }).emit(fakeCtx(dir), CONTENT, fakeResources())
+  return fs.readFileSync(path.join(dir, "index.html"), "utf8")
+}
+
+test("the fully-populated fixture renders every module, in registry order", async () => {
+  const html = await emitFixture("dashboard-full", "fixture-full")
+  const expected = [
+    "status",
+    "delta",
+    "timeline",
+    "next",
+    "effort",
+    "people",
+    "attention",
+    "decisions",
+    "activity",
+    "health",
+    "explore",
+  ]
+  // `activity` is absent here — the fixture has no logs dir and no contentDir —
+  // so assert on order among those that did render rather than on all eleven.
+  const positions = expected
+    .map((id) => [id, html.indexOf(`id="${id}"`)])
+    .filter(([, at]) => at !== -1)
+  assert.equal(positions.length >= 9, true, `only rendered: ${positions.map((p) => p[0])}`)
+  const order = positions.map(([, at]) => at)
+  assert.deepEqual(order, [...order].sort((a, b) => a - b))
+})
+
+test("every rendered module id is unique on the page", async () => {
+  const html = await emitFixture("dashboard-full", "fixture-unique")
+  const ids = [...html.matchAll(/id="(dash-[^"]+|status|delta|timeline|next|effort|people|attention|decisions|activity|health|explore)"/g)]
+    .map((m) => m[1])
+  assert.deepEqual([...new Set(ids)].length, ids.length)
+})
+
+test("the facts-only fixture omits every assessed module but keeps the stated ones", async () => {
+  const html = await emitFixture("dashboard-facts-only", "fixture-facts")
+  assert.match(html, /id="timeline"/)
+  assert.match(html, /id="next"/)
+  assert.match(html, /id="explore"/)
+  assert.equal(html.includes('id="delta"'), false)
+  assert.equal(html.includes('id="attention"'), false)
+  assert.equal(html.includes('id="decisions"'), false)
+  assert.equal(html.includes('id="people"'), false)
+  assert.equal(html.includes('id="effort"'), false)
+  // No status file means no RAG, but the counters are derived from milestones, so
+  // the summary strip still renders.
+  assert.match(html, /id="status"/)
+  assert.equal(html.includes("dash-rag--"), false)
+})

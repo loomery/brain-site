@@ -400,3 +400,57 @@ test("health reports the doc count and when the brain was last synced", () => {
   assert.match(html, /2 docs/)
   assert.match(html, /3 days ago/)
 })
+
+// --- onboarding ------------------------------------------------------------
+
+import { OnboardingModule } from "../assets/plugins/dashboard/onboarding.ts"
+
+function vmWithOnboarding(onboarding) {
+  return buildModel({
+    facts: FACTS,
+    status: null,
+    pageTitle: "Acme Brain",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    onboarding,
+    today: TODAY,
+  })
+}
+
+test("onboarding is null when no doc declares a role", () => {
+  assert.equal(OnboardingModule.render(vmWithOnboarding([])), null)
+  assert.equal(OnboardingModule.render(vmWithOnboarding(undefined)), null)
+})
+
+test("onboarding renders a chip per role, linking to that role's path page", () => {
+  const html = OnboardingModule.render(
+    vmWithOnboarding([
+      { role: "engineering", count: 6 },
+      { role: "product", count: 5 },
+    ]),
+  )
+  assert.match(html, /href="\/onboarding\/engineering"/)
+  assert.match(html, /Engineering/)
+  assert.match(html, /6/)
+  assert.match(html, /href="\/onboarding\/product"/)
+})
+
+test("onboarding always offers the all-roles index", () => {
+  const html = OnboardingModule.render(vmWithOnboarding([{ role: "engineering", count: 6 }]))
+  assert.match(html, /href="\/onboarding"/)
+})
+
+test("onboarding omits a role whose path resolves to nothing", () => {
+  const html = OnboardingModule.render(
+    vmWithOnboarding([
+      { role: "engineering", count: 6 },
+      { role: "ghost", count: 0 },
+    ]),
+  )
+  assert.equal(html.includes("Ghost"), false)
+})
+
+test("onboarding escapes a role name containing markup", () => {
+  const html = OnboardingModule.render(vmWithOnboarding([{ role: "<b>x</b>", count: 2 }]))
+  assert.equal(html.includes("<b>x</b>"), false)
+})

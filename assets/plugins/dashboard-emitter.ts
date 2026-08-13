@@ -40,6 +40,7 @@ import {
   gitDateFor,
 } from "@loomery/brain-site/lib/dashboard/load.mjs"
 import { buildModel } from "@loomery/brain-site/lib/dashboard/model.mjs"
+import { listRoles, buildRolePath } from "@loomery/brain-site/lib/onboarding/paths.mjs"
 import { MODULES } from "./dashboard/index.ts"
 import { humanize } from "./dashboard/render.ts"
 
@@ -131,6 +132,54 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+// ---------------------------------------------------------------------------
+// Onboarding role counts.
+//
+// The doc shape here is the same {slug, title, roles, onboarding} shape
+// onboarding-emitter.ts's own adaptDocs produces, deliberately, so both
+// emitters feed buildRolePath identical input and never disagree on ordering.
+// ---------------------------------------------------------------------------
+
+interface OnboardingDoc {
+  slug: string
+  title: string
+  roles: string[]
+  onboarding?: { order?: number; prerequisites?: string[]; summary?: string; estimate?: string }
+}
+
+function adaptOnboardingDocs(content: QuartzContent[]): OnboardingDoc[] {
+  const docs: OnboardingDoc[] = []
+  for (const [, file] of content) {
+    const data = file.data
+    const fm = data.frontmatter as Record<string, unknown> | undefined
+    const slug = data.slug as string | undefined
+    if (!fm || !slug) continue
+    const roles = Array.isArray(fm.roles) ? (fm.roles as unknown[]).filter((r) => typeof r === "string") : []
+    const title = typeof fm.title === "string" && fm.title.length > 0 ? fm.title : slug
+    docs.push({
+      slug,
+      title,
+      roles: roles as string[],
+      onboarding: (fm.onboarding as OnboardingDoc["onboarding"]) ?? undefined,
+    })
+  }
+  return docs
+}
+
+function onboardingCounts(content: QuartzContent[]): Array<{ role: string; count: number }> {
+  const docs = adaptOnboardingDocs(content)
+  try {
+    return listRoles(docs).map((role: string) => ({ role, count: buildRolePath(docs, role).length }))
+  } catch (err) {
+    // buildRolePath throws Error("cycle detected: ...") on a cyclic prerequisite
+    // graph. `npx brain-site validate` reports that properly; here it must only
+    // cost the one module, not the page.
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn(`[DashboardEmitter] onboarding paths unavailable: ${message}`)
+    return []
+  }
+}
+
 function renderModules(vm: Record<string, unknown>): string {
   const rendered: string[] = []
   for (const module of MODULES) {
@@ -177,6 +226,7 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
       pageTitle: opts.pageTitle ?? "Home",
       pages,
       activity: { logs, docs: recentDocs(pages, opts) },
+      onboarding: onboardingCounts(content as QuartzContent[]),
       today: todayIso(),
     })
 

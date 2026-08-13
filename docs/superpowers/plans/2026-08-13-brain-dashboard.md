@@ -3047,7 +3047,11 @@ test("timeline is null with nothing to draw", () => {
 test("timeline renders one bar segment per gap, with server-computed flex-basis", () => {
   const html = TimelineModule.render(vmFrom(FACTS, null))
   const segments = html.match(/class="dash-seg[^"]*"/g) ?? []
-  assert.equal(segments.length, 3)
+  // FACTS yields five dated nodes — the synthetic Start (2026-07-20), the three
+  // milestones (08-05, 08-14, 09-07), and the synthetic End (09-14) — hence four
+  // adjacent gaps, one segment each. Note Hack Week's `end: 2026-09-11` does not
+  // add a node: `timelineNodes` positions a milestone by its `date` only.
+  assert.equal(segments.length, 4)
   assert.match(html, /flex-basis:35%/)
   assert.match(html, /dash-seg--current/)
 })
@@ -5907,7 +5911,266 @@ EOF
 
 ---
 
-### Task 16: Document and release v1.4.0
+### Task 16: Branded hero header
+
+The client's name set large at the top of the dashboard, with the client's logo and Loomery's mark beside it.
+
+**Two decisions taken before this task, so the implementer does not have to make them:**
+
+- **No new `client:` key.** `dashboard.yaml`'s `project` already *is* the client name ("Secret Escapes"), and `buildModel` already exposes it as `vm.heading`. Adding a second key for the same concept would let the two disagree. This task changes presentation, and adds exactly one new key: `clientLogo`.
+- **Loomery's mark is an inlined SVG, not a shipped image.** The design-system logomark is 250 bytes of two shapes (`<rect>` + `<circle>`). Inlining it means CSS controls its fill, so it is theme-aware for free, and it needs no `quartz/static` copy step, no `PACKAGE_OWNED_STATIC` entry, and no 69K PNG in the package. The client's logo is a brain-owned image and stays a path.
+
+**Files:**
+- Modify: `src/lib/dashboard/schema.mjs` (allow `clientLogo`)
+- Modify: `src/lib/dashboard/model.mjs` (expose `clientLogo` on the view model)
+- Modify: `assets/plugins/dashboard/render.ts` (the Loomery logomark constant)
+- Modify: `assets/plugins/dashboard-emitter.ts` (render the hero header)
+- Modify: `assets/styles/_dashboard.scss` (hero header styles)
+- Test: `test/dashboard-schema.test.mjs`, `test/dashboard-model.test.mjs`, `test/dashboard-emitter.test.mjs`
+
+**Interfaces:**
+- `dashboard.yaml` gains an optional top-level `clientLogo: <string>` — a path served by the site, conventionally under the brain's `static:` directory so it resolves at `/static/...`. Validated as a non-empty string; not resolved or existence-checked at build time (the build must not fail over a missing image, and `static:` copying is already `setup`'s job).
+- `buildModel`'s returned object gains `clientLogo: string | null`.
+- `render.ts` gains `LOOMERY_LOGOMARK: string` — the inline SVG.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `test/dashboard-schema.test.mjs`:
+
+```js
+test("clientLogo is accepted as a non-empty string", () => {
+  assert.equal(validateFacts({ clientLogo: "/static/acme-logo.svg" }).ok, true)
+})
+
+test("a non-string or empty clientLogo is an error", () => {
+  assert.equal(validateFacts({ clientLogo: 42 }).ok, false)
+  assert.equal(validateFacts({ clientLogo: "" }).ok, false)
+})
+```
+
+Append to `test/dashboard-model.test.mjs`:
+
+```js
+test("buildModel exposes clientLogo, or null when unset", () => {
+  const withLogo = buildModel({
+    facts: { project: "Acme", clientLogo: "/static/acme.svg" },
+    status: null,
+    pageTitle: "x",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    today: "2026-08-13",
+  })
+  assert.equal(withLogo.clientLogo, "/static/acme.svg")
+
+  const without = buildModel({
+    facts: { project: "Acme" },
+    status: null,
+    pageTitle: "x",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    today: "2026-08-13",
+  })
+  assert.equal(without.clientLogo, null)
+})
+```
+
+Append to `test/dashboard-emitter.test.mjs`:
+
+```js
+test("the hero header always carries the Loomery logomark", async () => {
+  const dir = tmpDir("dash-hero-loomery")
+  const { html } = await emitTo(dir)
+  assert.match(html, /class="dash-hero"/)
+  assert.match(html, /dash-loomery-mark/)
+  assert.match(html, /<svg[^>]*viewBox="0 0 247 247"/)
+})
+
+test("the hero header shows the client logo when dashboard.yaml supplies one", async () => {
+  const dir = tmpDir("dash-hero-logo")
+  const brain = tmpDir("dash-hero-brain")
+  fs.writeFileSync(
+    path.join(brain, "dashboard.yaml"),
+    'project: Secret Escapes\nclientLogo: /static/secret-escapes.svg\n',
+  )
+  const { html } = await emitTo(dir, { options: { facts: path.join(brain, "dashboard.yaml") } })
+  assert.match(html, /<img class="dash-client-logo" src="\/static\/secret-escapes\.svg"/)
+  // The client's name is the accessible name for its own logo.
+  assert.match(html, /alt="Secret Escapes"/)
+  assert.match(html, /class="dash-hero-pair"/)
+})
+
+test("no client logo element is emitted when clientLogo is unset", async () => {
+  const dir = tmpDir("dash-hero-nologo")
+  const { html } = await emitTo(dir)
+  assert.equal(html.includes("dash-client-logo"), false)
+  // The pairing separator only makes sense with two marks to pair.
+  assert.equal(html.includes("dash-hero-pair"), false)
+})
+
+test("a clientLogo containing markup is escaped in the src attribute", async () => {
+  const dir = tmpDir("dash-hero-escape")
+  const brain = tmpDir("dash-hero-escape-brain")
+  fs.writeFileSync(
+    path.join(brain, "dashboard.yaml"),
+    'project: Acme\nclientLogo: \'x" onerror="alert(1)\'\n',
+  )
+  const { html } = await emitTo(dir, { options: { facts: path.join(brain, "dashboard.yaml") } })
+  assert.equal(html.includes('onerror="alert(1)"'), false)
+  assert.match(html, /&quot;/)
+})
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22 && node --test test/dashboard-schema.test.mjs test/dashboard-model.test.mjs test/dashboard-emitter.test.mjs`
+Expected: FAIL — `clientLogo` rejected as an unknown key; no `dash-hero` in the emitted HTML.
+
+- [ ] **Step 3a: Allow the key**
+
+In `src/lib/dashboard/schema.mjs`, add `"clientLogo"` to `FACTS_KEYS`, and beside the other top-level string checks in `validateFacts`:
+
+```js
+  checkString(config.clientLogo, "clientLogo", errors)
+```
+
+- [ ] **Step 3b: Expose it on the model**
+
+In `src/lib/dashboard/model.mjs`, in `buildModel`'s returned object, immediately after `subtitle`:
+
+```js
+    clientLogo: typeof facts?.clientLogo === "string" ? facts.clientLogo : null,
+```
+
+- [ ] **Step 3c: Add the logomark to `render.ts`**
+
+```ts
+// The Loomery logomark, from the design system: a mint bar and a mint dot.
+// Inlined rather than shipped as an image file for three reasons — it is 250
+// bytes, `fill="currentColor"` lets the stylesheet theme it (the design system's
+// own file hardcodes #15FFB9, which is unreadable on a white background), and it
+// needs no quartz/static copy step or PACKAGE_OWNED_STATIC entry.
+export const LOOMERY_LOGOMARK =
+  '<svg class="dash-loomery-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 247 247" ' +
+  'role="img" aria-label="Loomery" fill="currentColor">' +
+  '<rect x="0" y="0" width="111.054" height="247"></rect>' +
+  '<circle cx="190.994" cy="190.994" r="56.006"></circle>' +
+  "</svg>"
+```
+
+- [ ] **Step 3d: Render the hero header**
+
+In `assets/plugins/dashboard-emitter.ts`, import `LOOMERY_LOGOMARK` from `./dashboard/render.ts` and replace the `heading` assembly with:
+
+```ts
+    // The client's own logo is the brain's image; Loomery's mark is ours. The
+    // separator is only emitted when there are genuinely two marks to pair —
+    // a lone "×" beside one logo reads as a mistake.
+    const clientLogo =
+      vm.clientLogo === null
+        ? ""
+        : `<img class="dash-client-logo" src="${escapeHtml(String(vm.clientLogo))}" ` +
+          `alt="${escapeHtml(String(vm.heading))}">`
+    const marks =
+      clientLogo === ""
+        ? LOOMERY_LOGOMARK
+        : `<span class="dash-hero-pair">${clientLogo}<span class="dash-hero-x" aria-hidden="true">×</span>${LOOMERY_LOGOMARK}</span>`
+
+    const heading =
+      `<header class="dash-hero">` +
+      `<div class="dash-hero-titles">` +
+      `<h1 class="dash-heading">${escapeHtml(String(vm.heading))}</h1>` +
+      (vm.subtitle === null
+        ? ""
+        : `<p class="dash-subtitle">${escapeHtml(String(vm.subtitle))}</p>`) +
+      `</div>` +
+      `<div class="dash-hero-marks">${marks}</div>` +
+      CHROME_TOGGLE +
+      `</header>`
+```
+
+- [ ] **Step 3e: Style it**
+
+Replace the `.dash-header` block in `assets/styles/_dashboard.scss` with:
+
+```scss
+// Hero header: the client's name is the largest thing on the page, with the two
+// marks paired to its right. Below $mobile the marks drop under the title rather
+// than competing with it for width.
+.dash-hero {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.5rem;
+
+  .dash-hero-titles { flex: 1 1 16rem; }
+
+  .dash-heading {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin: 0;
+  }
+
+  .dash-subtitle {
+    color: var(--gray);
+    font-family: var(--codeFont);
+    font-size: 0.8rem;
+    margin: 0.4rem 0 0;
+  }
+
+  .dash-hero-marks { align-items: center; display: flex; flex: 0 0 auto; }
+  .dash-hero-pair { align-items: center; display: flex; gap: 0.85rem; }
+  .dash-hero-x { color: var(--gray); font-size: 1.1rem; }
+
+  .dash-client-logo { display: block; max-height: 2.5rem; max-width: 11rem; width: auto; }
+
+  // currentColor, so the mark inherits the accent that already differs between
+  // light and dark mode rather than hardcoding mint on a white background.
+  .dash-loomery-mark { color: var(--secondary); height: 1.75rem; width: 1.75rem; }
+}
+
+@media #{$mobile} {
+  .dash-hero {
+    .dash-hero-titles { flex-basis: 100%; }
+    .dash-heading { font-size: 1.9rem; }
+  }
+}
+```
+
+Remove the now-superseded `.dash-header` rules and the old `.dash-chrome-toggle { order: 2 }` ordering hack — the toggle is a flex child of `.dash-hero` now and needs no explicit order. Keep the rest of `.dash-chrome-toggle` unchanged.
+
+- [ ] **Step 4: Run tests**
+
+Run: `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22 && node --test`
+Expected: PASS, including the four new emitter tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/dashboard assets/plugins assets/styles test
+git commit -m "$(cat <<'EOF'
+feat: set the client name large in a hero header with both marks
+
+Adds one key, `clientLogo`, rather than a second name key: `project` already is
+the client's name, and two keys for one concept can disagree.
+
+Loomery's logomark is inlined SVG rather than a shipped image — 250 bytes, and
+`fill="currentColor"` lets the stylesheet theme it, where the design system's
+own file hardcodes mint and would be unreadable on white. It also needs no
+quartz/static copy step.
+
+The pairing separator is only emitted when there are two marks to pair; a lone
+"×" beside one logo reads as a mistake.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 17: Document and release v1.4.0
 
 **Files:**
 - Modify: `README.md`

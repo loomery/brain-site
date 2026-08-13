@@ -18,7 +18,8 @@
 - **No live tool reads at build time.** No network, no credentials. Linear/Jira reads belong to `/brain sync`.
 - **No new `brain-site.yaml` keys.** The two dashboard files are discovered by convention at the repository root.
 - **Dates are parsed as UTC midnight** from `YYYY-MM-DD` parts. Never `new Date(string)` — a build in BST would shift a day.
-- **`yaml` parses unquoted ISO dates into JS `Date` objects.** Every date field must accept `Date | string`.
+- **Dates arrive from YAML as strings, not `Date` objects.** `yaml@2` parses with the YAML 1.2 core schema by default, which has no timestamp type, so `end: 2026-09-14` yields the string `"2026-09-14"` exactly as a quoted one would. Parse with bare `YAML.parse(raw)` — do **not** pass `{ version: "1.1" }` to obtain `Date` objects: 1.1 also resolves `yes`/`no`/`on`/`off` to booleans (including in *keys* — a key `off:` becomes the key `false`) and reads `012` as octal `10`, so `soldDays: 012` would silently mean 10. Under 1.2 a mistyped `done: yes` is the string `"yes"`, which the schema rejects loudly; under 1.1 it would coerce silently. Loud beats silent.
+- Date handling nonetheless accepts `Date | string` throughout (`normalizeDate` takes either). That is defensive handling for a caller passing a `Date` directly — the model's own tests do — not a claim about what the parser produces. It is also why `isPlainObject` must exclude `Date` instances, since a `Date` is `typeof "object"`.
 - **Provenance labels are exactly two strings:** `stated` and `assessed`.
 - Commit messages end with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 

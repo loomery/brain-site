@@ -265,3 +265,138 @@ test("people escapes a focus containing markup", () => {
   const html = PeopleModule.render(vmFrom(facts, status))
   assert.equal(html.includes("<img src=x>"), false)
 })
+
+// --- attention, decisions, activity, health --------------------------------
+
+import { AttentionModule } from "../assets/plugins/dashboard/attention.ts"
+import { DecisionsModule } from "../assets/plugins/dashboard/decisions.ts"
+import { ActivityModule } from "../assets/plugins/dashboard/activity.ts"
+import { HealthModule } from "../assets/plugins/dashboard/health.ts"
+
+function vmWithActivity(activity, pages = []) {
+  return buildModel({
+    facts: FACTS,
+    status: null,
+    pageTitle: "Acme Brain",
+    pages,
+    activity,
+    today: TODAY,
+  })
+}
+
+test("attention is null with no attention entries", () => {
+  assert.equal(AttentionModule.render(vmFrom(FACTS, null)), null)
+  assert.equal(AttentionModule.render(vmFrom(FACTS, { attention: [] })), null)
+})
+
+test("attention renders text, detail and a severity class", () => {
+  const status = {
+    attention: [
+      { text: "Holborn office availability", detail: "travel blocked behind it", severity: "high" },
+      { text: "Third pillar unnamed" },
+    ],
+  }
+  const html = AttentionModule.render(vmFrom(FACTS, status))
+  assert.match(html, /Holborn office availability/)
+  assert.match(html, /travel blocked behind it/)
+  assert.match(html, /dash-sev--high/)
+  assert.match(html, /dash-sev--none/)
+  assert.match(html, /Third pillar unnamed/)
+})
+
+test("attention orders high severity first so the worst thing is at the top", () => {
+  const status = {
+    attention: [
+      { text: "low one", severity: "low" },
+      { text: "high one", severity: "high" },
+      { text: "medium one", severity: "medium" },
+    ],
+  }
+  const html = AttentionModule.render(vmFrom(FACTS, status))
+  assert.ok(html.indexOf("high one") < html.indexOf("medium one"))
+  assert.ok(html.indexOf("medium one") < html.indexOf("low one"))
+})
+
+test("decisions is null with no decisions", () => {
+  assert.equal(DecisionsModule.render(vmFrom(FACTS, null)), null)
+})
+
+test("decisions renders the text, who decided and when, newest first", () => {
+  const status = {
+    decisions: [
+      { text: "Survey to whole channel", by: "Milly", date: "2026-08-07" },
+      { text: "Hack Week 7-11 Sep", by: "Gianni", date: "2026-08-06" },
+    ],
+  }
+  const html = DecisionsModule.render(vmFrom(FACTS, status))
+  assert.ok(html.indexOf("Survey to whole channel") < html.indexOf("Hack Week"))
+  assert.match(html, /Gianni/)
+  assert.match(html, /6 Aug/)
+})
+
+test("decisions renders an entry with neither author nor date", () => {
+  const html = DecisionsModule.render(vmFrom(FACTS, { decisions: [{ text: "Something settled" }] }))
+  assert.match(html, /Something settled/)
+})
+
+test("activity is null with neither logs nor docs", () => {
+  assert.equal(ActivityModule.render(vmWithActivity({ logs: [], docs: [] })), null)
+})
+
+test("activity renders logs linked to the timeline page anchors", () => {
+  const activity = {
+    logs: [{ filename: "2026-08-10-deps.md", title: "2026-08-10 — Shared frontend dependency", date: "2026-08-10" }],
+    docs: [],
+  }
+  const html = ActivityModule.render(vmWithActivity(activity))
+  assert.match(html, /Shared frontend dependency/)
+  assert.match(html, /href="\/logs#2026-08-10-deps\.md"/)
+})
+
+test("activity renders recently updated docs linked to their slugs", () => {
+  const activity = { logs: [], docs: [{ slug: "engagement", title: "Engagement", date: "2026-08-07" }] }
+  const html = ActivityModule.render(vmWithActivity(activity))
+  assert.match(html, /href="\/engagement"/)
+  assert.match(html, /7 Aug/)
+})
+
+test("activity renders one column when only one side has data", () => {
+  const activity = { logs: [], docs: [{ slug: "engagement", title: "Engagement", date: "2026-08-07" }] }
+  const html = ActivityModule.render(vmWithActivity(activity))
+  assert.equal(html.includes("Latest logs"), false)
+  assert.match(html, /Recently updated/)
+})
+
+test("health is null with no sources and no sync date", () => {
+  assert.equal(HealthModule.render(vmFrom(FACTS, null)), null)
+})
+
+test("health renders a chip per source with a state tone", () => {
+  const status = {
+    generatedAt: "2026-08-13",
+    sources: [
+      { name: "Slack", state: "wired" },
+      { name: "Miro", state: "partial", note: "from screenshots" },
+      { name: "Linear", state: "absent" },
+    ],
+  }
+  const html = HealthModule.render(vmFrom(FACTS, status))
+  assert.match(html, /dash-chip--wired/)
+  assert.match(html, /dash-chip--partial/)
+  assert.match(html, /dash-chip--absent/)
+  assert.match(html, /from screenshots/)
+})
+
+test("health reports the doc count and when the brain was last synced", () => {
+  const vm = buildModel({
+    facts: FACTS,
+    status: { generatedAt: "2026-08-10" },
+    pageTitle: "x",
+    pages: [{ slug: "a", title: "A" }, { slug: "b", title: "B" }],
+    activity: { logs: [], docs: [] },
+    today: TODAY,
+  })
+  const html = HealthModule.render(vm)
+  assert.match(html, /2 docs/)
+  assert.match(html, /3 days ago/)
+})

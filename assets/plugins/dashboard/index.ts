@@ -12,6 +12,10 @@ import { TimelineModule } from "./timeline.ts"
 import { NextModule } from "./next.ts"
 import { EffortModule } from "./effort.ts"
 import { PeopleModule } from "./people.ts"
+import { AttentionModule } from "./attention.ts"
+import { DecisionsModule } from "./decisions.ts"
+import { ActivityModule } from "./activity.ts"
+import { HealthModule } from "./health.ts"
 import { ExploreModule } from "./explore.ts"
 
 export const MODULES: DashboardModule[] = [
@@ -21,5 +25,9 @@ export const MODULES: DashboardModule[] = [
   NextModule,
   EffortModule,
   PeopleModule,
+  AttentionModule,
+  DecisionsModule,
+  ActivityModule,
+  HealthModule,
   ExploreModule,
 ]

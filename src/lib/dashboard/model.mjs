@@ -232,13 +232,17 @@ export function buildTimeline(facts, today) {
     return plainTimeline(facts, today, realMilestones)
   }
 
-  // A node is "reached" once its date has arrived, even a synthetic bound —
-  // the engagement's start is behind us the moment today passes it — layered
-  // on top of a real milestone's own authored `done` flag, which can mark it
-  // done early (or, in principle, leave a passed one open).
+  // A synthetic bound (Start/End) is "reached" once its date has arrived —
+  // there is no author to mark it done, so passing its date is the only signal
+  // available. A real milestone's `done` is left exactly as authored: whether
+  // its date has passed is a *different* question, already answered by
+  // computeCounters' `behind` count, and conflating the two would let this
+  // node render filled-in (done) while the counters above it report the same
+  // milestone as behind — the exact cross-derivation contradiction this
+  // module exists to prevent.
   const nodes = rawNodes.map((node) => ({
     ...node,
-    done: node.done || (daysBetween(node.date, today) ?? -1) >= 0,
+    done: node.synthetic ? (daysBetween(node.date, today) ?? -1) >= 0 : node.done,
   }))
 
   const gaps = []
@@ -302,7 +306,12 @@ export function buildTimeline(facts, today) {
             label:
               gap.days === 0
                 ? null
-                : `day ${Math.min(Math.max(elapsedInGap, 0), gap.days) + 1} of ${gap.days}`,
+                // Clamp *after* adding one, not before: clamping first and then
+                // adding one lets an overrun (elapsedInGap >= gap.days, the case
+                // where currentIndex falls back to the last gap) read as
+                // "day gap.days + 1 of gap.days" — N exceeding M, the same bug
+                // already guarded against in plainTimeline's label below.
+                : `day ${Math.min(Math.max(elapsedInGap, 0) + 1, gap.days)} of ${gap.days}`,
           }
         : null,
     }

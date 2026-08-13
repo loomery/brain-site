@@ -390,6 +390,10 @@ test("past the end date, the legend reports an overrun and today is clamped to t
   assert.equal(sumBases(tl.segments), 100)
   const current = tl.segments.find((s) => s.kind === "current")
   assert.equal(current.today.offsetPct, 100)
+  // The label's day count must never exceed the gap's day count — clamping
+  // must happen after adding one, not before, or an overrun like this reads
+  // as "day 8 of 7".
+  assert.equal(current.today.label, "day 7 of 7")
   assert.equal(tl.legend.overranDays, 6)
   assert.equal(tl.legend.nextName, null)
 })
@@ -473,6 +477,24 @@ test("a milestone marked done reaches the node so the renderer can fill it", () 
   assert.equal(tl.segments[0].startNode.done, true)
   assert.equal(tl.segments[1].startNode.done, true)
   assert.equal(tl.segments[2].startNode.done, false)
+})
+
+test("an undone but overdue milestone's node stays done: false, matching computeCounters' behind count", () => {
+  // Survey due (08-14) and Training lands (08-17) have both passed by
+  // 2026-08-20 without being marked done. computeCounters correctly counts
+  // them as behind; the timeline node must agree they are not done, or the
+  // page would draw them filled-in (done) while its own counters call them
+  // behind.
+  const counters = computeCounters(TL_FACTS, null, "2026-08-20")
+  assert.equal(counters.done, 1)
+  assert.equal(counters.behind, 2)
+
+  const tl = buildTimeline(TL_FACTS, "2026-08-20")
+  const nodesByName = new Map(tl.segments.map((s) => [s.startNode.name, s.startNode]))
+  assert.equal(nodesByName.get("Survey due").done, false)
+  assert.equal(nodesByName.get("Training lands").done, false)
+  // Kickoff is authored done: true and stays done regardless of date.
+  assert.equal(nodesByName.get("Kickoff").done, true)
 })
 
 test("buildModel exposes the timeline", () => {

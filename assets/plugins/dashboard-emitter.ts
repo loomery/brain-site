@@ -1,0 +1,184 @@
+// Dashboard home-page emitter. Emits `/` (index.html) as a modular overview of
+// the project — countdown, milestone timeline, status, people, activity — but
+// ONLY when the brain has not written its own `docs/index.md`. A brain that has
+// one keeps it, untouched.
+//
+// This replaces home-emitter.ts, whose structural page/section listing survives
+// as the `explore` module (see dashboard/explore.ts). That is deliberate: it
+// means `/` always renders, a brain with no dashboard data is no worse off than
+// before, and there is one precedence rule rather than three tiers.
+//
+// Why an emitter rather than a Quartz config option: Quartz's own
+// @quartz-community/folder-page generates a virtual index for any folder lacking
+// one, but explicitly excludes the content root — getFolders() collects ancestor
+// folder names and the caller filters out ".", so the root is structurally
+// excluded from the mechanism regardless of options. A config-only fix does not
+// exist; this emitter fills the one gap folder-page deliberately leaves.
+//
+// Same hand-written-HTML approach as onboarding-emitter.ts and
+// logs-timeline-emitter.ts, for the same reason — see either file's banner
+// (local plugins load via a genuine Node import(), never esbuild, and
+// .brain-site/quartz/**'s extension-less relative imports are unresolvable by
+// Node's own loader).
+//
+// The circularity to avoid: this writes index.html, and page-shell's chrome
+// donor logic would happily read index.html back as a donor for this very page.
+// emitPage's donorExclude parameter (passed as ["index"]) makes page-shell skip
+// index.html for this call, so it always picks a genuine donor. See
+// page-shell.ts's DEFAULT_EXCLUDED_DONOR_SLUGS comment.
+//
+// Today's date is read here, once, and injected into the model. That is the one
+// deliberate source of build non-reproducibility in the dashboard, and it is
+// inherent to a countdown.
+
+import path from "path"
+import type { QuartzEmitterPlugin, FilePath } from "@quartz-community/types"
+import { emitPage, escapeHtml } from "./shared/page-shell.ts"
+import {
+  loadDashboardFiles,
+  loadLogActivity,
+  gitDateFor,
+} from "@loomery/brain-site/lib/dashboard/load.mjs"
+import { buildModel } from "@loomery/brain-site/lib/dashboard/model.mjs"
+import { MODULES } from "./dashboard/index.ts"
+import { humanize } from "./dashboard/render.ts"
+
+interface DashboardOptions {
+  facts?: string
+  status?: string
+  contentDir?: string
+  logsDir?: string
+  rootDir?: string
+  pageTitle?: string
+}
+
+interface PageItem {
+  slug: string
+  title: string
+  filePath: string | null
+}
+
+type QuartzContent = [unknown, { data: Record<string, unknown> }]
+
+const RECENT_DOC_LIMIT = 3
+const RECENT_LOG_LIMIT = 3
+
+function adaptContent(content: QuartzContent[]): PageItem[] {
+  const items: PageItem[] = []
+  for (const [, file] of content) {
+    const data = file.data
+    const slug = data?.slug as string | undefined
+    if (!slug) continue
+    if (data.unlisted === true) continue
+    const fm = data.frontmatter as Record<string, unknown> | undefined
+    // A page with no frontmatter title falls back to its own slug, humanised
+    // the same way explore.ts already humanises folder names — a raw slug
+    // ("product-context") reads as a filename, not a title.
+    const title =
+      typeof fm?.title === "string" && fm.title.length > 0 ? fm.title : humanize(slug)
+    const filePath = typeof data.filePath === "string" ? data.filePath : null
+    items.push({ slug, title, filePath })
+  }
+  return items
+}
+
+function hasRootIndex(items: PageItem[]): boolean {
+  return items.some((item) => item.slug === "index")
+}
+
+// The most recently changed docs, by last-commit date. Only pages Quartz already
+// parsed are candidates, so this never has to walk the content directory itself.
+function recentDocs(
+  pages: PageItem[],
+  opts: DashboardOptions,
+): Array<{ slug: string; title: string; date: string }> {
+  const rootDir = opts.rootDir
+  const contentDir = opts.contentDir
+  if (!rootDir || !contentDir) return []
+
+  const dated: Array<{ slug: string; title: string; date: string }> = []
+  for (const page of pages) {
+    if (page.slug === "index") continue
+    const rel = page.filePath ?? `${page.slug}.md`
+    const abs = path.isAbsolute(rel) ? rel : path.join(contentDir, rel)
+    const date = gitDateFor(rootDir, abs)
+    if (date !== null) dated.push({ slug: page.slug, title: page.title, date })
+  }
+
+  return dated
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, RECENT_DOC_LIMIT)
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function renderModules(vm: Record<string, unknown>): string {
+  const rendered: string[] = []
+  for (const module of MODULES) {
+    let html: string | null
+    try {
+      html = module.render(vm)
+    } catch (err) {
+      // One broken module must not cost the whole page. This is the same
+      // philosophy as emitPage's own last-resort fallback.
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(`[DashboardEmitter] module "${module.id}" failed and was skipped: ${message}`)
+      continue
+    }
+    if (html !== null && html.length > 0) rendered.push(html)
+  }
+  return rendered.join("\n")
+}
+
+export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {}) => ({
+  name: "DashboardEmitter",
+  async emit(ctx, content, resources): Promise<FilePath[]> {
+    const pages = adaptContent(content as QuartzContent[])
+
+    // The brain wrote its own index.md — @quartz-community/content-page already
+    // emits index.html for it. Never touch it, and never race that emitter for
+    // the same output file.
+    if (hasRootIndex(pages)) return []
+
+    const { facts, status, warnings } = loadDashboardFiles({
+      factsPath: opts.facts ?? null,
+      statusPath: opts.status ?? null,
+    })
+    const { logs, warnings: logWarnings } = loadLogActivity({
+      logsDir: opts.logsDir ?? null,
+      limit: RECENT_LOG_LIMIT,
+    })
+    for (const warning of [...warnings, ...logWarnings]) {
+      console.warn(`[DashboardEmitter] ${warning}`)
+    }
+
+    const vm = buildModel({
+      facts,
+      status,
+      pageTitle: opts.pageTitle ?? "Home",
+      pages,
+      activity: { logs, docs: recentDocs(pages, opts) },
+      today: todayIso(),
+    })
+
+    const heading = `<h1 class="dash-heading">${escapeHtml(String(vm.heading))}</h1>`
+    const body = `<div class="dashboard">${heading}${renderModules(vm)}</div>`
+
+    return [
+      await emitPage(
+        ctx,
+        resources,
+        "index",
+        String(vm.heading),
+        body,
+        "DashboardEmitter",
+        "",
+        ["index"],
+      ),
+    ]
+  },
+})
+
+export default DashboardEmitter

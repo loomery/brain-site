@@ -6,6 +6,14 @@
 // line here — no brain edits, no brain-site.yaml key, no schema change.
 
 import type { DashboardModule } from "./types.ts"
+import { SummaryModule } from "./summary.ts"
+import { DeltaModule } from "./delta.ts"
+import { TimelineModule } from "./timeline.ts"
 import { ExploreModule } from "./explore.ts"
 
-export const MODULES: DashboardModule[] = [ExploreModule]
+export const MODULES: DashboardModule[] = [
+  SummaryModule,
+  DeltaModule,
+  TimelineModule,
+  ExploreModule,
+]

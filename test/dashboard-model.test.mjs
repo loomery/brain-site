@@ -293,3 +293,196 @@ test("effort is null without soldDays — a bar with no denominator says nothing
   })
   assert.equal(vm.effort, null)
 })
+
+// ---------------------------------------------------------------------------
+// Fisheye timeline
+//
+// The invariant every case below checks: bases always sum to 100, the current
+// segment always gets exactly CURRENT_SEGMENT_BASIS, and exactly one segment is
+// ever marked current. Those three hold regardless of how degenerate the input
+// is, which is what stops a malformed brain producing a bar that overflows its
+// container or renders two "today" markers.
+
+import { buildTimeline, CURRENT_SEGMENT_BASIS } from "../src/lib/dashboard/model.mjs"
+
+const TL_FACTS = {
+  start: "2026-07-20",
+  end: "2026-09-14",
+  milestones: [
+    { date: "2026-08-05", name: "Kickoff", done: true },
+    { date: "2026-08-14", name: "Survey due" },
+    { date: "2026-08-17", name: "Training lands" },
+    { date: "2026-09-07", end: "2026-09-11", name: "Hack Week" },
+  ],
+}
+
+function sumBases(segments) {
+  return Math.round(segments.reduce((total, s) => total + s.basis, 0))
+}
+
+test("fisheye bases sum to 100 and the current segment takes the fixed share", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  assert.equal(tl.mode, "fisheye")
+  assert.equal(sumBases(tl.segments), 100)
+  const current = tl.segments.filter((s) => s.kind === "current")
+  assert.equal(current.length, 1)
+  assert.equal(current[0].basis, CURRENT_SEGMENT_BASIS)
+})
+
+test("the current segment is the gap containing today, and labels the day within it", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  const current = tl.segments.find((s) => s.kind === "current")
+  assert.equal(current.startNode.name, "Kickoff")
+  assert.equal(current.today.label, "day 9 of 9")
+  // 8 of 9 days elapsed between 05 Aug and 14 Aug.
+  assert.equal(Math.round(current.today.offsetPct), 89)
+})
+
+test("segments before the current one are past, after are future", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  const kinds = tl.segments.map((s) => s.kind)
+  // TL_FACTS has 4 real milestones plus start/end bounds: 6 distinct dated
+  // nodes, so 5 adjacent gaps — one past (start -> Kickoff), one current
+  // (Kickoff -> Survey due, which contains today), and three future.
+  assert.deepEqual(kinds, ["past", "current", "future", "future", "future"])
+})
+
+test("only the last segment carries an endNode, so each node renders once", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  const withEnd = tl.segments.filter((s) => s.endNode !== null)
+  assert.equal(withEnd.length, 1)
+  assert.equal(withEnd[0], tl.segments.at(-1))
+  assert.equal(withEnd[0].endNode.date, "2026-09-14")
+})
+
+test("the legend names what was just passed and what is next", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  assert.equal(tl.legend.pastName, "Kickoff")
+  assert.equal(tl.legend.pastDaysAgo, 8)
+  assert.equal(tl.legend.nextName, "Survey due")
+  assert.equal(tl.legend.nextInDays, 1)
+  assert.equal(tl.legend.nextIsEnd, false)
+  assert.equal(tl.legend.overranDays, 0)
+})
+
+test("today before the first milestone magnifies start -> first, with no past segment", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-07-25")
+  assert.equal(sumBases(tl.segments), 100)
+  assert.equal(tl.segments[0].kind, "current")
+  assert.equal(tl.segments[0].startNode.date, "2026-07-20")
+  assert.equal(tl.segments[0].startNode.synthetic, true)
+  assert.equal(tl.segments.some((s) => s.kind === "past"), false)
+  assert.equal(tl.legend.nextName, "Kickoff")
+})
+
+test("today after the last milestone magnifies last -> end and the legend names the end", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-09-12")
+  assert.equal(sumBases(tl.segments), 100)
+  assert.equal(tl.segments.at(-1).kind, "current")
+  assert.equal(tl.segments.at(-1).endNode.synthetic, true)
+  assert.equal(tl.legend.nextIsEnd, true)
+  assert.equal(tl.legend.nextInDays, 2)
+  assert.equal(tl.legend.overranDays, 0)
+})
+
+test("past the end date, the legend reports an overrun and today is clamped to the bar", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-09-20")
+  assert.equal(sumBases(tl.segments), 100)
+  const current = tl.segments.find((s) => s.kind === "current")
+  assert.equal(current.today.offsetPct, 100)
+  assert.equal(tl.legend.overranDays, 6)
+  assert.equal(tl.legend.nextName, null)
+})
+
+test("fewer than two milestones degrades to a plain start -> end progress bar", () => {
+  const facts = { start: "2026-07-20", end: "2026-09-14", milestones: [{ date: "2026-08-05", name: "Kickoff" }] }
+  const tl = buildTimeline(facts, "2026-08-13")
+  assert.equal(tl.mode, "plain")
+  assert.equal(Math.round(tl.progressPct), 43)
+  assert.equal(tl.todayLabel, "day 25 of 56")
+})
+
+test("no milestones at all still gives a plain bar when the bounds are known", () => {
+  const tl = buildTimeline({ start: "2026-07-20", end: "2026-09-14" }, "2026-08-13")
+  assert.equal(tl.mode, "plain")
+})
+
+test("timeline is null with neither bounds nor two milestones — nothing to draw", () => {
+  assert.equal(buildTimeline({}, "2026-08-13"), null)
+  assert.equal(buildTimeline({ start: "2026-07-20" }, "2026-08-13"), null)
+  assert.equal(buildTimeline(null, "2026-08-13"), null)
+})
+
+test("two milestones and no bounds still produce a fisheye", () => {
+  const facts = {
+    milestones: [
+      { date: "2026-08-05", name: "Kickoff" },
+      { date: "2026-08-14", name: "Survey due" },
+    ],
+  }
+  const tl = buildTimeline(facts, "2026-08-10")
+  assert.equal(tl.mode, "fisheye")
+  assert.equal(tl.segments.length, 1)
+  assert.equal(tl.segments[0].basis, 100)
+})
+
+test("milestones are sorted by date rather than trusting file order", () => {
+  const facts = {
+    milestones: [
+      { date: "2026-08-17", name: "Third" },
+      { date: "2026-08-05", name: "First" },
+      { date: "2026-08-14", name: "Second" },
+    ],
+  }
+  const tl = buildTimeline(facts, "2026-08-06")
+  assert.deepEqual(
+    tl.segments.map((s) => s.startNode.name),
+    ["First", "Second"],
+  )
+})
+
+test("two milestones on the same date collapse to one node without a zero-width segment", () => {
+  const facts = {
+    milestones: [
+      { date: "2026-08-05", name: "Kickoff" },
+      { date: "2026-08-05", name: "Contract" },
+      { date: "2026-08-14", name: "Survey due" },
+    ],
+  }
+  const tl = buildTimeline(facts, "2026-08-10")
+  assert.equal(sumBases(tl.segments), 100)
+  assert.equal(tl.segments.length, 1)
+  // Both names survive on the surviving node so neither milestone vanishes.
+  assert.match(tl.segments[0].startNode.name, /Kickoff/)
+  assert.match(tl.segments[0].startNode.name, /Contract/)
+})
+
+test("a zero-duration current gap does not divide by zero", () => {
+  const facts = {
+    milestones: [
+      { date: "2026-08-05", name: "A" },
+      { date: "2026-08-05", name: "B" },
+    ],
+  }
+  const tl = buildTimeline(facts, "2026-08-05")
+  assert.equal(tl.mode, "plain")
+})
+
+test("a milestone marked done reaches the node so the renderer can fill it", () => {
+  const tl = buildTimeline(TL_FACTS, "2026-08-13")
+  assert.equal(tl.segments[0].startNode.done, true)
+  assert.equal(tl.segments[1].startNode.done, true)
+  assert.equal(tl.segments[2].startNode.done, false)
+})
+
+test("buildModel exposes the timeline", () => {
+  const vm = buildModel({
+    facts: TL_FACTS,
+    status: null,
+    pageTitle: "x",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    today: "2026-08-13",
+  })
+  assert.equal(vm.timeline.mode, "fisheye")
+})

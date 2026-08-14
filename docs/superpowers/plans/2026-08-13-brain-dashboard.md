@@ -5397,9 +5397,28 @@ EOF
 
 ---
 
-### Task 14: Seed Secret Escapes
+### Task 14: Seed both brains
 
-Both files hand-authored from what is already grounded in that brain's `docs/`, then verified against a real build. **This task commits to a different repository** — `/Users/tomholmes/Developer/Project Brains/Secret escapes` — not to `brain-site`.
+Both dashboard files hand-authored per brain from what is already grounded in that brain's own `docs/`, the shared `dashboard` skill linked, and each brain's sync routine pointed at it. **This task commits to two repositories other than `brain-site`:**
+
+- `/Users/tomholmes/Developer/Project Brains/Secret escapes`
+- `/Users/tomholmes/Developer/Project Brains/Eque2-Chalkstring`
+
+The Secret Escapes seed below is given verbatim and has already been validated against the real loader (zero warnings; derived model matches the acceptance checklist). The Eque2-Chalkstring seed is **not** given verbatim — it must be authored from that brain's docs under the grounding rules in §14b, because inventing a client's delivery facts is the one failure this whole design exists to prevent.
+
+**Per-brain summary of what changes:**
+
+| | Secret Escapes | Eque2-Chalkstring |
+| --- | --- | --- |
+| `dashboard.yaml` | verbatim, §14a | authored, §14b |
+| `dashboard.status.yaml` | verbatim, §14a | authored, §14b |
+| `skills/dashboard` symlink | yes | yes |
+| Playbook sync reference | yes, §14c | yes, §14c |
+| `docs/index.md` | absent — nothing to do | **rename to `docs/orientation.md`** (§14b) |
+| Onboarding module | absent (no `roles:` frontmatter yet) | populates — ~10 docs carry `roles:` |
+| Recent activity | logs only | logs + docs (26 log entries) |
+
+#### §14a — Secret Escapes
 
 Every value below traces to `docs/engagement.md`, `docs/stakeholders.md` or `docs/onboarding-status.md` in that brain. Nothing is invented. `effort:` is deliberately omitted: no source tracks days sold or used, and the module's whole design is to be absent rather than show a fabricated number.
 
@@ -6301,4 +6320,146 @@ EOF
 )"
 ```
 
-Seeding Eque2-Chalkstring, linking the skill there, adding `roles:` frontmatter to Secret Escapes docs so its Onboarding module becomes non-empty, and referencing the skill from each brain's own playbook §4 sync procedure are deliberate follow-ups — not part of this plan.
+#### §14b — Eque2-Chalkstring
+
+This brain is a **pursuit**, not a delivery engagement, and its dashboard must read that way. Its shape differs from Secret Escapes in three ways that matter:
+
+**No `end:` date, deliberately.** No source records a decision date or an engagement end — the only forward-looking date is Eque2's stated *target project start*, beginning of September 2026. Do **not** invent an end date to make the countdown appear. Omit `end:` and let the Time-left module be absent; the fisheye still works from milestones alone (`buildTimeline` needs two real milestones, not bounds). Record in the report that this was a deliberate omission.
+
+**`docs/index.md` must be renamed.** That brain has a 67-line hand-written home page, and the dashboard emitter stands aside whenever `docs/index.md` exists — so without this, the seed data would be invisible. Rename it with `git mv docs/index.md docs/orientation.md` and add nothing else: its "start here" role-path list and "essentials" section are largely what the Onboarding and Explore modules now render, and the remaining prose (the "this does not hold the truth itself — `sources.yaml` points at the live systems that do" framing) is worth keeping at `/orientation`. Check the repo for internal links pointing at `/` or `index` and update any you find.
+
+**Grounding rules — these are the point of this section.** Every value must trace to a line in that brain's own docs. Read all of `docs/engagement.md`, `docs/stakeholders.md`, `docs/pitch-2026-08-10.md` and `docs/onboarding-status.md` before writing anything, and in the report **cite the source for every field you author**. Where a fact is not in a source, omit the field rather than filling it — `docs/engagement.md`'s own "Open questions (need a human, not a source)" section lists three such gaps, and they belong in `attention:` as open questions, not invented into `people:` roles or dates.
+
+Specific traps in this brain's sources, all of which a careless author would get wrong:
+
+- **Phase numbering is genuinely ambiguous.** `engagement.md` records that "Phase 1/2" in the delivery-plan PDFs and "Phase 2/3" in the original proposal are *the same two phases*. Do not present either numbering as fact in a milestone label.
+- **"Mark Roberts" vs "Mark Rogerson" is unresolved** — possibly one person under a mistyped name, possibly two. `stakeholders.md` says explicitly to ask a human before addressing him in writing. Put at most one of them in `people:` and record the ambiguity in `attention:`.
+- **A previously-corrected error is still in the doc's history.** An earlier version recorded a 2026-03-11 acquisition-completion date; the acquisition was not announced until 2026-06-23. Use the corrected date.
+- **The pitch has already happened** relative to the seed's `generatedAt` (2026-08-10 pitch, today 2026-08-14), so its milestone is `done: true` and the status file's `delta` should describe the post-pitch position — awaiting a decision, competitively against Software Mind.
+- **`docs/pitch-2026-08-10.md` is internal-only** and records Loomery's own cost position and competitive read. It is legitimate grounding for `attention:` and `decisions:`, but keep the *numbers* out of `dashboard.status.yaml` unless they already appear in `engagement.md`, which is the durable summary.
+
+Everything else follows §14a's shape. Validate with `npx brain-site validate` and confirm zero warnings from a real load before committing.
+
+#### §14c — Point each brain's sync routine at the skill
+
+The `dashboard` skill only helps if `/brain sync` knows to use it. In **both** brains, add a short step to `skills/brain/PLAYBOOK.md`'s sync procedure (§4) instructing the agent to invoke the `dashboard` skill and regenerate `dashboard.status.yaml` as part of a sync, after the docs have been updated and before the session log is written.
+
+Keep it to a few lines and match the playbook's existing voice. Two things it must say, because they are the contract the skill itself documents: `dashboard.yaml` is human-owned and read-only to an agent, and the status file is regenerated wholesale rather than patched. Do not restate the whole skill — link to it.
+
+This is the step that closes the loop the human partner asked for: the frontend arrives by `npm update`, and the *content* stays current because every sync refreshes it.
+
+#### §14d — Not in scope
+
+Adding `roles:` frontmatter to Secret Escapes' docs, so its Onboarding module becomes non-empty, remains a deliberate follow-up — that is a content decision about that brain's reading paths, not part of shipping the dashboard.
+
+---
+
+### Task 18: Bring the Warp Brain Generator up to this standard
+
+**This task commits to a third repository:** `/Users/tomholmes/Developer/Loomery/Tools/Warp Brain Generator`.
+
+Every brain that generator creates already depends on this package — `lib/site.mjs`'s `scaffoldOptionalSite` writes a `package.json` pinning `github:loomery/brain-site#semver:^1.0.0`, so a generated brain picks up new 1.x releases on `npm update` with no edit. That half already works. Two gaps remain:
+
+1. **A new brain gets the dashboard capability but nothing to show in it.** Nothing scaffolds `dashboard.yaml`, and nothing links the `dashboard` skill, so every new brain starts with a home page that is only the Explore listing until somebody discovers the feature exists.
+2. **The two repositories are undocumented as linked.** The generator's `README.md` contains zero mentions of `brain-site`, Quartz, or the frontend — confirmed by grep. Someone reading it cannot tell that the site is a versioned dependency of every brain it produces, nor where to go to change it.
+
+**Why the generator may create the symlink when `setup` may not:** `setup` runs against an existing brain and must never write tracked files. The generator is *creating* the repository and owns its initial commit, so a tracked symlink is exactly its job.
+
+**Files:**
+- Modify: `lib/site.mjs` (scaffold `dashboard.yaml`; create the skill symlink)
+- Modify: `README.md` (document the brain-site relationship)
+- Modify: `templates/skills/brain/PLAYBOOK.md` (the sync step, matching §14c)
+- Test: `test/site-scaffold.test.mjs`
+
+- [ ] **Step 1: Write the failing tests**
+
+Extend `test/site-scaffold.test.mjs`. Read it first and follow its existing style rather than importing a second one. Cover:
+
+- `scaffoldOptionalSite` writes `dashboard.yaml` containing the project name as `project:`.
+- The scaffolded `dashboard.yaml` **passes `validateFacts`**. Import the real validator from the generated brain's dependency if resolvable; if it is not resolvable from this repo, assert instead that the file parses as YAML to a mapping with a non-empty string `project`, and say in the report that the stronger check was not available. Do not silently weaken it.
+- `skills/dashboard` is created as a **symlink** (`fs.lstatSync(...).isSymbolicLink()`), not a directory of copied files, and its target is `../node_modules/@loomery/brain-site/assets/skills/dashboard`.
+- The existing `package.json` pin and `brain-site.yaml` assertions still pass unchanged.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run the generator's own test command (check its `package.json` — likely `node --test`). Expected: FAIL, no `dashboard.yaml` written.
+
+- [ ] **Step 3a: Scaffold `dashboard.yaml`**
+
+In `lib/site.mjs`, alongside the existing two writes. It must be **valid and useful immediately** — `project:` alone already gives the hero header its name — while making clear what a human should fill in. Every key is optional, so a mostly-commented file is valid:
+
+```js
+  // A starter dashboard: `project` alone is enough for the hero header, and every
+  // other key is optional, so this file is valid from the moment it is written.
+  // The commented keys are the ones a human owns — dates and milestones are
+  // commitments somebody made, so the generator must not invent them.
+  writeFileEnsuringDir(
+    path.join(outDir, 'dashboard.yaml'),
+    [
+      '# Human-owned ground truth for the dashboard at `/`. Never rewritten by a sync —',
+      '# assessed material (RAG, attention, who is doing what) lives in',
+      '# dashboard.status.yaml, which the `dashboard` skill regenerates.',
+      '#',
+      '# Fill in the dates and milestones when you know them; until then the dashboard',
+      '# shows what it can and omits the rest.',
+      `project: ${ctx.PROJECT_NAME}`,
+      '# subtitle: one line on what this engagement is',
+      '# clientLogo: /static/client-logo.svg',
+      '# start: 2026-01-01',
+      '# end: 2026-12-31',
+      '# milestones:',
+      '#   - { date: 2026-01-15, name: Kickoff, done: true }',
+      '# people:',
+      '#   - { name: Your Name, role: Engineer, org: Loomery }',
+      '',
+    ].join('\n'),
+  );
+```
+
+- [ ] **Step 3b: Link the skill**
+
+Create `skills/dashboard` as a relative symlink. Use `fs.symlinkSync` with the relative target so it resolves inside whatever directory the brain is later cloned to. Guard against the link already existing (the generator may be re-run), and if `skills/` does not exist yet in the output, create it — the templates already ship `skills/brain` and `skills/onboard`, so ordering matters: run this *after* the template copy, or `mkdir -p` first.
+
+Handle the symlink failing without aborting the whole generation: on a filesystem that forbids symlinks, log a clear message telling the user to create it by hand with the same `ln -s` command `brain-site setup` prints, then continue. A generated brain missing one skill link is recoverable; a generator that crashes half-way is not.
+
+- [ ] **Step 3c: Document the relationship in `README.md`**
+
+Add a short section in the engineer-facing half (after "Layout" reads naturally). It must state plainly:
+
+- The browsable site is **not** part of this generator. It is `@loomery/brain-site` — a separate repository, `github.com/loomery/brain-site` — and every generated brain depends on it.
+- The generator writes only the two files a brain owns for the site: the version pin in `package.json` and the `brain-site.yaml` override. The pin is a semver range (`^1.0.0`), so brains pick up new 1.x releases on `npm update` without anyone editing them.
+- `/` is a project dashboard, built from `dashboard.yaml` (human-owned) and `dashboard.status.yaml` (regenerated by the bundled `dashboard` skill at each sync). The generator scaffolds the first and links the skill; a brain with neither file still gets a working home page.
+- Change the site's look or behaviour in `brain-site`, not here — a change there reaches every brain; a change here reaches only brains generated afterwards. **That asymmetry is the reason to state all of this.**
+
+- [ ] **Step 3d: Add the sync step to the template playbook**
+
+Apply the same edit as §14c to `templates/skills/brain/PLAYBOOK.md`, so brains generated from now on have the loop wired from birth. Match that file's existing voice.
+
+- [ ] **Step 4: Run the generator's full test suite**
+
+Expected: PASS, including its existing scaffold and wizard-flow tests.
+
+If the generator has a way to produce a brain end-to-end into a temp directory, do that too and confirm the result contains `dashboard.yaml`, a resolving `skills/dashboard` symlink, and an unchanged `package.json` pin. Report the command and output.
+
+- [ ] **Step 5: Commit — in the generator repository**
+
+```bash
+cd "/Users/tomholmes/Developer/Loomery/Tools/Warp Brain Generator" && git add lib/site.mjs README.md templates/skills/brain/PLAYBOOK.md test/site-scaffold.test.mjs && git commit -m "$(cat <<'EOF'
+feat: scaffold the dashboard and document the brain-site dependency
+
+Every generated brain already depends on @loomery/brain-site via a semver range,
+so it picks up frontend releases on `npm update`. But nothing scaffolded the
+dashboard's own files, so a new brain got the capability with nothing to show in
+it, and the README never mentioned the site at all — a reader could not tell the
+frontend lived in another repository.
+
+Now writes a starter dashboard.yaml (valid immediately; `project` alone gives the
+hero header its name, and the keys a human owns are commented rather than
+invented) and links the bundled `dashboard` skill. The generator may create that
+tracked symlink because it owns the initial commit, where `brain-site setup` may
+not.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+EOF
+)"
+```

@@ -51,7 +51,7 @@ import { fileURLToPath } from "node:url"
 import { execFileSync } from "node:child_process"
 import YAML from "yaml"
 import { validateOverride } from "../config/schema.mjs"
-import { mergeConfig, TIMELINE_DEFAULTS } from "../config/merge.mjs"
+import { mergeConfig, TIMELINE_DEFAULTS, DASHBOARD_STATUS_FILE } from "../config/merge.mjs"
 
 const QUARTZ_REPO_URL = "https://github.com/jackyzha0/quartz.git"
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
@@ -524,6 +524,33 @@ function runBuild(generatedDir, resolvedOverride, { serve }) {
   execFileSync("npx", args, { cwd: generatedDir, stdio: "inherit" })
 }
 
+const DASHBOARD_SKILL_LINK = path.join("skills", "dashboard")
+
+// Detects whether the brain has linked this package's `dashboard` skill. Never
+// creates it: the link lands in the brain's *tracked* skills/ directory (a
+// brain's .claude/skills is itself a tracked symlink to ../skills), and setup
+// writes nothing tracked — same boundary that keeps it out of .gitignore and the
+// root package.json.
+//
+// Returns true for "nothing to say": already linked, the brain wrote its own
+// dashboard skill, or this repo has no skills/ directory at all.
+export function checkDashboardSkillLink(rootDir) {
+  const skillsDir = path.join(rootDir, "skills")
+  try {
+    if (!fs.statSync(skillsDir).isDirectory()) return true
+  } catch {
+    return true
+  }
+  // lstat, not stat: a symlink pointing at a not-yet-installed node_modules path
+  // is still the brain having opted in, and stat would call that missing.
+  try {
+    fs.lstatSync(path.join(rootDir, DASHBOARD_SKILL_LINK))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function runSetup({ rootDir, then }) {
   if (!checkNodeVersion()) return 1
 
@@ -549,6 +576,16 @@ export async function runSetup({ rootDir, then }) {
     runBuild(generatedDir, resolvedOverride, { serve: then === "serve" })
   } else {
     log("Done. Next: npx brain-site build   or   npx brain-site serve")
+  }
+
+  if (!checkDashboardSkillLink(rootDir)) {
+    log(
+      "tip: this brain has a skills/ directory but has not linked the shared " +
+        "`dashboard` skill, which tells an agent how to regenerate " +
+        `${DASHBOARD_STATUS_FILE}. To add it (one tracked symlink, committed by you):\n` +
+        "  ln -s ../node_modules/@loomery/brain-site/assets/skills/dashboard skills/dashboard\n" +
+        "Then reference it from your brain skill's sync procedure.",
+    )
   }
 
   return 0

@@ -20,6 +20,7 @@ import {
   copyBrainStatic,
   copyPackageAssets,
   resolveOverridePaths,
+  checkDashboardSkillLink,
 } from "../src/commands/setup.mjs"
 
 function tmp(prefix) {
@@ -292,4 +293,44 @@ test("resolveOverridePaths does not mutate the override it is given", () => {
   resolveOverridePaths("/brains/acme", original)
   assert.equal(original.content, "docs")
   assert.equal(original.sections.timeline.source, "logs")
+})
+
+// --- dashboard skill link detection ----------------------------------------
+//
+// setup must never create this symlink: it lands in the brain's tracked
+// skills/ directory (via the tracked .claude/skills -> ../skills symlink), and
+// setup writes nothing tracked. It only detects and hints.
+
+test("reports missing when a skills directory exists without the dashboard link", () => {
+  const dir = tmp("skilllink-missing")
+  fs.mkdirSync(path.join(dir, "skills", "brain"), { recursive: true })
+  assert.equal(checkDashboardSkillLink(dir), false)
+})
+
+test("reports present when the dashboard skill is linked", () => {
+  const dir = tmp("skilllink-present")
+  fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+  fs.symlinkSync("../node_modules/@loomery/brain-site/assets/skills/dashboard", path.join(dir, "skills", "dashboard"))
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("reports present when the brain has a real dashboard skill directory of its own", () => {
+  const dir = tmp("skilllink-own")
+  fs.mkdirSync(path.join(dir, "skills", "dashboard"), { recursive: true })
+  // A brain that wrote its own dashboard skill has opted out of the shared one;
+  // nagging it would be wrong.
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("reports present when the brain has no skills directory at all", () => {
+  const dir = tmp("skilllink-noskills")
+  // Not every consumer is a brain-shaped repo with skills/. Nothing to hint at.
+  assert.equal(checkDashboardSkillLink(dir), true)
+})
+
+test("detection never throws on a broken symlink", () => {
+  const dir = tmp("skilllink-broken")
+  fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+  fs.symlinkSync("./nowhere-at-all", path.join(dir, "skills", "dashboard"))
+  assert.equal(checkDashboardSkillLink(dir), true)
 })

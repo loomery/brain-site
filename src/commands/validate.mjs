@@ -22,7 +22,10 @@
 
 import { readFileSync, readdirSync } from "node:fs"
 import { join, relative, extname } from "node:path"
+import YAML from "yaml"
 import { validateDocs } from "../lib/audience/validate.mjs"
+import { validateFacts, validateStatus } from "../lib/dashboard/schema.mjs"
+import { DASHBOARD_FACTS_FILE, DASHBOARD_STATUS_FILE } from "../config/merge.mjs"
 
 // Transient / non-content directories — never validated, per AGENTS.md
 // ("docs/inbox/ is transient") and the plan (source-materials is raw input,
@@ -119,7 +122,48 @@ function toSlug(filePath, docsRoot) {
   return rel.slice(0, -extname(rel).length)
 }
 
-export function runValidate({ docsRoot, sourceHint = null }) {
+// Validates the two dashboard files, if present. Returns an array of
+// `<file>: <message>` strings — empty when everything is fine or absent.
+//
+// This is the loud counterpart to the build's warn-and-continue: the same
+// validators run in both places, but here a problem exits non-zero. A missing
+// file is not a problem — both are optional by design.
+function validateDashboardFiles(rootDir) {
+  const problems = []
+
+  const read = (filename) => {
+    const filePath = join(rootDir, filename)
+    let raw
+    try {
+      raw = readFileSync(filePath, "utf8")
+    } catch (err) {
+      if (err.code !== "ENOENT") problems.push(`${filename}: ${err.message}`)
+      return { present: false, data: null }
+    }
+    try {
+      return { present: true, data: YAML.parse(raw) ?? null }
+    } catch (err) {
+      problems.push(`${filename}: ${err.message}`)
+      return { present: false, data: null }
+    }
+  }
+
+  const facts = read(DASHBOARD_FACTS_FILE)
+  if (facts.present && facts.data !== null) {
+    const { errors } = validateFacts(facts.data)
+    for (const message of errors) problems.push(`${DASHBOARD_FACTS_FILE}: ${message}`)
+  }
+
+  const status = read(DASHBOARD_STATUS_FILE)
+  if (status.present && status.data !== null) {
+    const { errors } = validateStatus(status.data, facts.data)
+    for (const message of errors) problems.push(`${DASHBOARD_STATUS_FILE}: ${message}`)
+  }
+
+  return problems
+}
+
+export function runValidate({ docsRoot, sourceHint = null, rootDir = null }) {
   let files
   try {
     files = walk(docsRoot)
@@ -138,15 +182,24 @@ export function runValidate({ docsRoot, sourceHint = null }) {
 
   const { ok, errors } = validateDocs(docs)
 
-  if (!ok) {
+  const dashboardProblems = rootDir === null ? [] : validateDashboardFiles(rootDir)
+
+  if (!ok || dashboardProblems.length > 0) {
     for (const { slug, message } of errors) {
       console.error(`${slug}: ${message}`)
     }
+    for (const problem of dashboardProblems) {
+      console.error(problem)
+    }
     const failingDocs = new Set(errors.map((e) => e.slug)).size
-    console.error(`\n${errors.length} error(s) across ${failingDocs} file(s).`)
+    const parts = []
+    if (errors.length > 0) parts.push(`${errors.length} doc error(s) across ${failingDocs} file(s)`)
+    if (dashboardProblems.length > 0) parts.push(`${dashboardProblems.length} dashboard error(s)`)
+    console.error(`\n${parts.join(", ")}.`)
     return 1
   }
 
-  console.log(`ok: ${docs.length} docs validated, 0 errors.`)
+  const suffix = rootDir === null ? "" : ", dashboard files ok"
+  console.log(`ok: ${docs.length} docs validated, 0 errors${suffix}.`)
   return 0
 }

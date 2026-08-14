@@ -4,8 +4,15 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { runValidate } from "../src/commands/validate.mjs"
 
 const CLI = path.resolve(import.meta.dirname, "../bin/brain-site.mjs")
+
+function tmpDir(prefix) {
+  // realpath: on macOS os.tmpdir() is a /var -> /private/var symlink, and some
+  // comparisons need the resolved form too.
+  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `brain-site-${prefix}-`)))
+}
 
 function run(args, opts = {}) {
   try {
@@ -79,4 +86,62 @@ test("with no brain-site.yaml, validate falls back to docs/ and says so when mis
   assert.equal(code, 1)
   assert.match(stderr, /docs directory not found/)
   assert.match(stderr, /fell back to "docs"/)
+})
+
+// --- dashboard file validation ---------------------------------------------
+
+test("validate reports an unknown key in dashboard.yaml and exits non-zero", () => {
+  const dir = tmpDir("validate-dash-bad")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "mileStones: []\n")
+  const errors = []
+  const originalError = console.error
+  console.error = (msg) => errors.push(String(msg))
+  let code
+  try {
+    code = runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir })
+  } finally {
+    console.error = originalError
+  }
+  assert.equal(code, 1)
+  assert.equal(errors.some((e) => e.includes('unknown key "mileStones"')), true)
+  assert.equal(errors.some((e) => e.includes("dashboard.yaml")), true)
+})
+
+test("validate reports a status person missing from the roster", () => {
+  const dir = tmpDir("validate-dash-roster")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "people:\n  - name: Milly Allatson\n")
+  fs.writeFileSync(path.join(dir, "dashboard.status.yaml"), "people:\n  - name: Ghost\n")
+  const errors = []
+  const originalError = console.error
+  console.error = (msg) => errors.push(String(msg))
+  let code
+  try {
+    code = runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir })
+  } finally {
+    console.error = originalError
+  }
+  assert.equal(code, 1)
+  assert.equal(errors.some((e) => e.includes("people roster")), true)
+})
+
+test("validate passes when both dashboard files are valid", () => {
+  const dir = tmpDir("validate-dash-good")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "project: Acme\nend: 2026-09-14\n")
+  assert.equal(runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir }), 0)
+})
+
+test("validate passes when neither dashboard file exists", () => {
+  const dir = tmpDir("validate-dash-absent")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  assert.equal(runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir }), 0)
+})
+
+test("omitting rootDir skips dashboard validation entirely", () => {
+  const dir = tmpDir("validate-dash-skipped")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "mileStones: []\n")
+  assert.equal(runValidate({ docsRoot: path.join(dir, "docs") }), 0)
 })

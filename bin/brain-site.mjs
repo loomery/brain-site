@@ -61,6 +61,10 @@ switch (command) {
     process.exit(
       runValidate({
         docsRoot: path.resolve(rootDir, dir),
+        // The two dashboard files live at the repository root by convention, so
+        // validating them needs the root itself — not the docs directory, which
+        // a brain can point anywhere via `content:`.
+        rootDir,
         // Only set when neither --docs nor brain-site.yaml's `content:` supplied the
         // path, so a "not found" error can say where the path came from.
         sourceHint: fellBack

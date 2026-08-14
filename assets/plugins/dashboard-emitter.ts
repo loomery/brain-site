@@ -42,7 +42,7 @@ import {
 import { buildModel } from "@loomery/brain-site/lib/dashboard/model.mjs"
 import { listRoles, buildRolePath } from "@loomery/brain-site/lib/onboarding/paths.mjs"
 import { MODULES } from "./dashboard/index.ts"
-import { humanize } from "./dashboard/render.ts"
+import { humanize, LOOMERY_LOGOMARK } from "./dashboard/render.ts"
 
 interface DashboardOptions {
   facts?: string
@@ -284,14 +284,30 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
       today: todayIso(),
     })
 
+    // The client's own logo is the brain's image; Loomery's mark is ours. The
+    // separator is only emitted when there are genuinely two marks to pair —
+    // a lone "×" beside one logo reads as a mistake.
+    const clientLogo =
+      vm.clientLogo === null
+        ? ""
+        : `<img class="dash-client-logo" src="${escapeHtml(String(vm.clientLogo))}" ` +
+          `alt="${escapeHtml(String(vm.heading))}">`
+    const marks =
+      clientLogo === ""
+        ? LOOMERY_LOGOMARK
+        : `<span class="dash-hero-pair">${clientLogo}<span class="dash-hero-x" aria-hidden="true">×</span>${LOOMERY_LOGOMARK}</span>`
+
     const heading =
-      `<div class="dash-header">` +
+      `<header class="dash-hero">` +
+      `<div class="dash-hero-titles">` +
       `<h1 class="dash-heading">${escapeHtml(String(vm.heading))}</h1>` +
       (vm.subtitle === null
         ? ""
         : `<p class="dash-subtitle">${escapeHtml(String(vm.subtitle))}</p>`) +
-      CHROME_TOGGLE +
       `</div>` +
+      `<div class="dash-hero-marks">${marks}</div>` +
+      CHROME_TOGGLE +
+      `</header>` +
       CHROME_SYNC
     const body = `${CHROME_SCRIPT}<div class="dashboard">${heading}${renderModules(vm)}</div>`
 

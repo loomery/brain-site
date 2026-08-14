@@ -23,6 +23,7 @@ const FACTS_KEYS = new Set([
   "commitments",
   "effort",
   "people",
+  "clientLogo",
 ])
 const PHASE_KEYS = new Set(["name", "start"])
 const MILESTONE_KEYS = new Set(["date", "end", "name", "done", "label", "owner"])
@@ -135,6 +136,7 @@ export function validateFacts(facts) {
   checkUnknownKeys(config, FACTS_KEYS, "", errors)
   checkString(config.project, "project", errors)
   checkString(config.subtitle, "subtitle", errors)
+  checkString(config.clientLogo, "clientLogo", errors)
   checkDate(config.start, "start", errors)
   checkDate(config.end, "end", errors)
 

@@ -369,3 +369,45 @@ test("the chrome preference is restored from localStorage before paint", async (
   // produces a visible layout jump.
   assert.equal(html.indexOf("brain-site-chrome") < html.indexOf('class="dashboard"'), true)
 })
+
+test("the hero header always carries the Loomery logomark", async () => {
+  const dir = tmpDir("dash-hero-loomery")
+  const { html } = await emitTo(dir)
+  assert.match(html, /class="dash-hero"/)
+  assert.match(html, /dash-loomery-mark/)
+  assert.match(html, /<svg[^>]*viewBox="0 0 247 247"/)
+})
+
+test("the hero header shows the client logo when dashboard.yaml supplies one", async () => {
+  const dir = tmpDir("dash-hero-logo")
+  const brain = tmpDir("dash-hero-brain")
+  fs.writeFileSync(
+    path.join(brain, "dashboard.yaml"),
+    'project: Secret Escapes\nclientLogo: /static/secret-escapes.svg\n',
+  )
+  const { html } = await emitTo(dir, { options: { facts: path.join(brain, "dashboard.yaml") } })
+  assert.match(html, /<img class="dash-client-logo" src="\/static\/secret-escapes\.svg"/)
+  // The client's name is the accessible name for its own logo.
+  assert.match(html, /alt="Secret Escapes"/)
+  assert.match(html, /class="dash-hero-pair"/)
+})
+
+test("no client logo element is emitted when clientLogo is unset", async () => {
+  const dir = tmpDir("dash-hero-nologo")
+  const { html } = await emitTo(dir)
+  assert.equal(html.includes("dash-client-logo"), false)
+  // The pairing separator only makes sense with two marks to pair.
+  assert.equal(html.includes("dash-hero-pair"), false)
+})
+
+test("a clientLogo containing markup is escaped in the src attribute", async () => {
+  const dir = tmpDir("dash-hero-escape")
+  const brain = tmpDir("dash-hero-escape-brain")
+  fs.writeFileSync(
+    path.join(brain, "dashboard.yaml"),
+    'project: Acme\nclientLogo: \'x" onerror="alert(1)\'\n',
+  )
+  const { html } = await emitTo(dir, { options: { facts: path.join(brain, "dashboard.yaml") } })
+  assert.equal(html.includes('onerror="alert(1)"'), false)
+  assert.match(html, /&quot;/)
+})

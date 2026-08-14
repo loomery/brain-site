@@ -508,3 +508,25 @@ test("buildModel exposes the timeline", () => {
   })
   assert.equal(vm.timeline.mode, "fisheye")
 })
+
+test("buildModel exposes clientLogo, or null when unset", () => {
+  const withLogo = buildModel({
+    facts: { project: "Acme", clientLogo: "/static/acme.svg" },
+    status: null,
+    pageTitle: "x",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    today: "2026-08-13",
+  })
+  assert.equal(withLogo.clientLogo, "/static/acme.svg")
+
+  const without = buildModel({
+    facts: { project: "Acme" },
+    status: null,
+    pageTitle: "x",
+    pages: [],
+    activity: { logs: [], docs: [] },
+    today: "2026-08-13",
+  })
+  assert.equal(without.clientLogo, null)
+})

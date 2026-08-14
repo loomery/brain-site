@@ -354,6 +354,7 @@ export function buildModel({ facts, status, pageTitle, pages, activity, onboardi
     heading:
       typeof facts?.project === "string" && facts.project.length > 0 ? facts.project : pageTitle,
     subtitle: typeof facts?.subtitle === "string" ? facts.subtitle : null,
+    clientLogo: typeof facts?.clientLogo === "string" ? facts.clientLogo : null,
     generatedAt: normalizeDate(status?.generatedAt),
     today,
     rag,

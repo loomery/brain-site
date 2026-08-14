@@ -136,3 +136,12 @@ test("attention entries require text", () => {
   assert.equal(ok, false)
   assert.match(errors[0], /attention\[0\]\.text is required/)
 })
+
+test("clientLogo is accepted as a non-empty string", () => {
+  assert.equal(validateFacts({ clientLogo: "/static/acme-logo.svg" }).ok, true)
+})
+
+test("a non-string or empty clientLogo is an error", () => {
+  assert.equal(validateFacts({ clientLogo: 42 }).ok, false)
+  assert.equal(validateFacts({ clientLogo: "" }).ok, false)
+})

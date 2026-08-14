@@ -46,3 +46,15 @@ export function humanize(text: string): string {
   const spaced = text.replace(/[-_]/g, " ")
   return spaced.length > 0 ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : spaced
 }
+
+// The Loomery logomark, from the design system: a mint bar and a mint dot.
+// Inlined rather than shipped as an image file for three reasons — it is 250
+// bytes, `fill="currentColor"` lets the stylesheet theme it (the design system's
+// own file hardcodes #15FFB9, which is unreadable on a white background), and it
+// needs no quartz/static copy step or PACKAGE_OWNED_STATIC entry.
+export const LOOMERY_LOGOMARK =
+  '<svg class="dash-loomery-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 247 247" ' +
+  'role="img" aria-label="Loomery" fill="currentColor">' +
+  '<rect x="0" y="0" width="111.054" height="247"></rect>' +
+  '<circle cx="190.994" cy="190.994" r="56.006"></circle>' +
+  "</svg>"

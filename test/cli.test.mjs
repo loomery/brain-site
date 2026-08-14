@@ -145,3 +145,78 @@ test("omitting rootDir skips dashboard validation entirely", () => {
   fs.writeFileSync(path.join(dir, "dashboard.yaml"), "mileStones: []\n")
   assert.equal(runValidate({ docsRoot: path.join(dir, "docs") }), 0)
 })
+
+function captureErrors(fn) {
+  const errors = []
+  const originalError = console.error
+  console.error = (msg) => errors.push(String(msg))
+  let code
+  try {
+    code = fn()
+  } finally {
+    console.error = originalError
+  }
+  return { code, errors }
+}
+
+// A structurally invalid dashboard.yaml (a top-level list, not a mapping)
+// must not cascade into every status person being flagged as an unknown
+// roster member on top of the one real "must be a mapping" problem — a
+// roster that failed validation cannot vouch for a name, so the cross-check
+// is skipped rather than treating the failed file as an empty roster.
+test("a structurally invalid dashboard.yaml does not cascade into roster errors", () => {
+  const dir = tmpDir("validate-dash-cascade")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "- name: whoops\n")
+  fs.writeFileSync(
+    path.join(dir, "dashboard.status.yaml"),
+    "people:\n  - name: Milly Allatson\n  - name: Ghost\n",
+  )
+  const { code, errors } = captureErrors(() =>
+    runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir }),
+  )
+  assert.equal(code, 1)
+  assert.equal(
+    errors.some((e) => e.includes("must be a mapping")),
+    true,
+  )
+  assert.equal(
+    errors.some((e) => e.includes("people roster")),
+    false,
+  )
+})
+
+// Byte-identical to the pre-dashboard-validation wording: a doc-only failure
+// with `rootDir` omitted must read exactly as it did before this option
+// existed, so a shipped CLI path never drifts silently.
+test("a doc-only failure with rootDir omitted keeps the original wording", () => {
+  const dir = tmpDir("validate-doc-only-fail")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "docs", "b.md"), "---\ntitle: B\n---\n# B\n")
+  const { code, errors } = captureErrors(() => runValidate({ docsRoot: path.join(dir, "docs") }))
+  assert.equal(code, 1)
+  assert.equal(errors.includes("\n1 error(s) across 1 file(s)."), true)
+})
+
+// The core "one run surfaces everything" requirement: a doc error and a
+// dashboard error present at once must both be reported, with the summary
+// line counting each category correctly.
+test("doc and dashboard errors are both reported in a single run", () => {
+  const dir = tmpDir("validate-dash-and-doc")
+  fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+  fs.writeFileSync(path.join(dir, "docs", "b.md"), "---\ntitle: B\n---\n# B\n")
+  fs.writeFileSync(path.join(dir, "dashboard.yaml"), "mileStones: []\n")
+  const { code, errors } = captureErrors(() =>
+    runValidate({ docsRoot: path.join(dir, "docs"), rootDir: dir }),
+  )
+  assert.equal(code, 1)
+  assert.equal(
+    errors.some((e) => e.includes("missing or malformed `audience`")),
+    true,
+  )
+  assert.equal(
+    errors.some((e) => e.includes('unknown key "mileStones"')),
+    true,
+  )
+  assert.equal(errors.includes("\n1 doc error(s) across 1 file(s), 1 dashboard error(s)."), true)
+})

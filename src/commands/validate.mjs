@@ -149,14 +149,21 @@ function validateDashboardFiles(rootDir) {
   }
 
   const facts = read(DASHBOARD_FACTS_FILE)
+  let factsForRoster = null
   if (facts.present && facts.data !== null) {
-    const { errors } = validateFacts(facts.data)
+    const { ok, errors } = validateFacts(facts.data)
     for (const message of errors) problems.push(`${DASHBOARD_FACTS_FILE}: ${message}`)
+    // A roster that failed validation cannot vouch for a name — pass null
+    // rather than the raw parsed data, exactly as src/lib/dashboard/load.mjs
+    // does, so a single structural error (e.g. a top-level list instead of a
+    // mapping) doesn't cascade into every status person being flagged as
+    // unknown on top of the one real problem.
+    if (ok) factsForRoster = facts.data
   }
 
   const status = read(DASHBOARD_STATUS_FILE)
   if (status.present && status.data !== null) {
-    const { errors } = validateStatus(status.data, facts.data)
+    const { errors } = validateStatus(status.data, factsForRoster)
     for (const message of errors) problems.push(`${DASHBOARD_STATUS_FILE}: ${message}`)
   }
 
@@ -192,10 +199,17 @@ export function runValidate({ docsRoot, sourceHint = null, rootDir = null }) {
       console.error(problem)
     }
     const failingDocs = new Set(errors.map((e) => e.slug)).size
-    const parts = []
-    if (errors.length > 0) parts.push(`${errors.length} doc error(s) across ${failingDocs} file(s)`)
-    if (dashboardProblems.length > 0) parts.push(`${dashboardProblems.length} dashboard error(s)`)
-    console.error(`\n${parts.join(", ")}.`)
+    if (dashboardProblems.length > 0) {
+      const parts = []
+      if (errors.length > 0) parts.push(`${errors.length} doc error(s) across ${failingDocs} file(s)`)
+      parts.push(`${dashboardProblems.length} dashboard error(s)`)
+      console.error(`\n${parts.join(", ")}.`)
+    } else {
+      // Byte-identical to the pre-dashboard-validation wording: omitting
+      // `rootDir` (or a run with no dashboard problems) must read exactly as
+      // it did before this option existed.
+      console.error(`\n${errors.length} error(s) across ${failingDocs} file(s).`)
+    }
     return 1
   }
 

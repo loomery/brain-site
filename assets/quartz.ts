@@ -1,6 +1,7 @@
 import { componentRegistry } from "./quartz/components/registry"
 import { loadQuartzConfig, loadQuartzLayout } from "./quartz/plugins/loader/config-loader"
 import { LoomeryBrandTitle } from "./plugins/shared/brand-page-title"
+import { ExplorerWithHome } from "./plugins/shared/explorer-with-home"
 
 // Loomery co-branded page title. Full component swap, not an option override — @quartz-community/page-title's
 // PageTitle takes no configurable options at all (its package.json declares
@@ -24,6 +25,27 @@ componentRegistry.register(
   "@quartz-community/page-title",
 )
 
+// Full component swap for the Explorer, same reasoning and same
+// componentRegistry.register call shape as LoomeryBrandTitle above — this
+// package's own ExplorerWithHome wraps the real Explorer to add a persistent
+// "Home" link, since the Explorer's own file tree is built entirely from
+// parsed content and the dashboard is emitted by DashboardEmitter, so it can
+// never appear in that tree. Must run before loadQuartzConfig() for the same
+// reason as the page-title swap: componentLoader.ts's own registration of the
+// real Explorer under this same key only happens `if (!componentRegistry.get(
+// pluginName))`, so registering first here wins and stays.
+//
+// Unlike LoomeryBrandTitle, ExplorerWithHome deliberately does NOT set a
+// `.displayName` on itself — see that file's own comment on why: it must
+// still be called as a real `(opts) => QuartzComponent` constructor so the
+// setOptionOverrides call below keeps reaching the real Explorer's
+// filterFn/mapFn/sortFn, which it forwards through unchanged.
+componentRegistry.register(
+  "@quartz-community/explorer",
+  ExplorerWithHome,
+  "@quartz-community/explorer",
+)
+
 // Explorer sidebar overrides (brain-specific).
 //
 // Registered directly against componentRegistry rather than via the documented
@@ -35,7 +57,8 @@ componentRegistry.register(
 // which only walks PLUGINS_DIR). The override lookup key that config-loader.ts
 // actually uses at instantiation time is `extractPluginName(entry.source)`, which
 // for a bare npm-style source string returns the string verbatim — so the key
-// below must match `quartz.config.yaml`'s Explorer `source:` field exactly.
+// below must match `quartz.config.yaml`'s Explorer `source:` field exactly. These
+// overrides reach the real Explorer via ExplorerWithHome's own forwarding, above.
 componentRegistry.setOptionOverrides("@quartz-community/explorer", {
   // Keep the stock default (hide the auto-generated tags folder) and additionally
   // hide docs/meta/ — if this brain uses that convention for internal build-tooling

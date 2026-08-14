@@ -54,6 +54,66 @@ npm i && npx brain-site serve
 
 Needs Node >= 22 (Quartz v5's own requirement); the CLI refuses to run on anything older.
 
+## The dashboard
+
+`/` is a project dashboard: countdown, milestone timeline, status, who's on it,
+recent activity. It is built from two **optional** files at the repository root,
+both discovered by convention — there is no `brain-site.yaml` key for either,
+and a brain with neither still gets a home page (a structural listing of its
+pages and sections, which is what `/` was before). A brain that has written its
+own `docs/index.md` keeps it; the dashboard only ever fills that one gap.
+
+`dashboard.yaml` — human-owned ground truth. Never rewritten by a sync.
+
+| Key | Feeds |
+| --- | --- |
+| `project`, `subtitle` | the page heading (falls back to `pageTitle`) |
+| `clientLogo` | the client's mark, paired with Loomery's in the header |
+| `start`, `end` | the countdown and the timeline's bounds |
+| `phases[]` | "phase 2 of 4" |
+| `milestones[]` | the timeline, and the done/behind counters |
+| `commitments[]` | What's next, alongside upcoming milestones |
+| `effort{}` | the Effort bar — omit it and the module is absent |
+| `people[]` | the roster in Who's on it |
+
+`dashboard.status.yaml` — LLM-owned, regenerated wholesale at each sync:
+`generatedAt`, `since`, `status{rag,headline}`, `delta`, `attention[]`,
+`decisions[]`, `people[]`, `keyReads[]`, `sources[]`.
+
+Both are allowlist-validated: an unrecognised key is an error, not a silently
+ignored line. Every module labels itself **stated** (from `dashboard.yaml`, git,
+or frontmatter) or **assessed** (from `dashboard.status.yaml`), so a reader can
+always tell a fact from a judgement.
+
+A module whose data is missing renders nothing — no configuration selects them.
+Nothing is read from Linear, Jira or any other live tool at build time: the
+build is offline and credential-free, and those reads belong to `/brain sync`,
+which persists what it finds into `dashboard.status.yaml`.
+
+A build never fails over these files. A missing, malformed or invalid one warns
+and drops the affected module; `npx brain-site validate` is where it is a
+non-zero error.
+
+### Keeping the status file current
+
+This package bundles a `dashboard` skill that tells an agent how to regenerate
+`dashboard.status.yaml` — the ownership split, how to pick a RAG rating, and
+what to ground each field in. Link it once, and it updates with the skin:
+
+```bash
+ln -s ../node_modules/@loomery/brain-site/assets/skills/dashboard skills/dashboard
+```
+
+Commit that symlink. It resolves through a brain's own `.claude/skills ->
+../skills`, so Claude Code picks the skill up, and `npm update
+@loomery/brain-site` refreshes its content with nothing further to do. `setup`
+never creates the link — it lands in the brain's tracked `skills/` directory,
+and `setup` writes nothing tracked — but it does print this command when it
+notices the link is missing.
+
+Then reference the skill from your brain skill's own sync procedure, so a
+`/brain sync` refreshes the dashboard as part of the run.
+
 ## Commands
 
 All four run from the brain's repository root and read `brain-site.yaml` from there.
@@ -63,7 +123,7 @@ All four run from the brain's repository root and read `brain-site.yaml` from th
 | `npx brain-site setup` | Fetches Quartz, lays down `.brain-site/`, copies this package's assets and the brain's `static:`, writes the merged config, installs dependencies and plugins. Safe to re-run. |
 | `npx brain-site build` | `setup`, then a one-shot Quartz build into `.brain-site/public/`. |
 | `npx brain-site serve` | `setup`, then a watch-mode build on `localhost:8080`, rebuilding on content edits. Config edits need a restart. |
-| `npx brain-site validate` | Checks every doc's frontmatter (`audience`, `roles`, `onboarding.prerequisites`). Defaults to the `content:` directory from `brain-site.yaml`; `--docs <dir>` overrides it. |
+| `npx brain-site validate` | Checks every doc's frontmatter (`audience`, `roles`, `onboarding.prerequisites`) and, if present, `dashboard.yaml` and `dashboard.status.yaml`. Defaults to the `content:` directory from `brain-site.yaml`; `--docs <dir>` overrides it. |
 
 `setup` never writes to either tracked file. Everything it generates lands in
 `.brain-site/` at the repository root, which is disposable: delete it, re-run `setup`, and

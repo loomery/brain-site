@@ -5560,15 +5560,18 @@ people:
     state: idle
 
 keyReads:
-  - { slug: engagement, why: why Loomery is here, the four-phase plan, and what was agreed at kickoff }
-  - { slug: stakeholders, why: who decides and who to route questions through, on both sides }
-  - { slug: product-context, why: what Secret Escapes actually sells and the domain language }
+  # Every `why:` is double-quoted, and must stay that way. In a YAML flow mapping
+  # `{ }` a comma separates keys, so an unquoted `why: a, b` parses `b` as a second
+  # key and the whole file fails validation with "unknown key".
+  - { slug: engagement, why: "why Loomery is here, the four-phase plan, and what was agreed at kickoff" }
+  - { slug: stakeholders, why: "who decides and who to route questions through, on both sides" }
+  - { slug: product-context, why: "what Secret Escapes actually sells and the domain language" }
 
 sources:
   - { name: Slack, state: wired, note: "two Slack Connect channels: #secretescapes-loomery and #ai-champions-ft-loomery" }
   - { name: Granola, state: wired, note: scoped to the "secret escapes" folder }
-  - { name: Google Drive, state: wired, note: index-style, four files }
-  - { name: Miro, state: partial, note: one board, grounded from screenshots — the MCP has repeatedly 502'd }
+  - { name: Google Drive, state: wired, note: "index-style, four files" }
+  - { name: Miro, state: partial, note: "one board, grounded from screenshots — the MCP has repeatedly 502'd" }
   - { name: Linear, state: absent }
   - { name: Notion, state: absent }
   - { name: Figma, state: absent }

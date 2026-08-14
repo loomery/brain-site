@@ -1,0 +1,16 @@
+project: Fixture Brain
+subtitle: Every module populated
+start: 2026-07-01
+end: 2026-09-30
+phases:
+  - { name: One, start: 2026-07-01 }
+  - { name: Two, start: 2026-08-01 }
+milestones:
+  - { date: 2026-07-10, name: Alpha, done: true }
+  - { date: 2026-08-20, name: Beta }
+  - { date: 2026-09-10, end: 2026-09-12, name: Gamma, owner: Ada }
+commitments:
+  - { date: 2026-08-25, text: Interim review, owner: Ada }
+effort: { soldDays: 20, usedDays: 8, inFlightDays: 2 }
+people:
+  - { name: Ada Lovelace, role: Engineer, org: Fixture Co }

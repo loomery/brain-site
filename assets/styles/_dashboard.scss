@@ -1,0 +1,424 @@
+@use "./variables.scss" as *;
+
+// Dashboard styles.
+//
+// Every colour is one of Quartz's own theme custom properties (set from the
+// Loomery design-system tokens in quartz.config.base.yaml), never a literal.
+// That is what makes light and dark mode both work from one stylesheet: the
+// variables flip, these rules do not.
+//
+// --dash-line is derived rather than added as a new token: a card needs a border
+// distinguishable from its own fill, and mixing the existing muted-foreground
+// colour into transparency gives that in both themes without introducing a
+// palette entry that has to be maintained in two places.
+
+.dashboard {
+  --dash-line: color-mix(in oklab, var(--gray) 35%, transparent);
+  --dash-amber: #ffc44d;
+  --dash-red: #ff5c72;
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+// Hero header: the client's name is the largest thing on the page, with the two
+// marks paired to its right. Below $mobile the marks drop under the title rather
+// than competing with it for width.
+.dash-hero {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.5rem;
+
+  .dash-hero-titles { flex: 1 1 16rem; }
+
+  .dash-heading {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin: 0;
+  }
+
+  .dash-subtitle {
+    color: var(--gray);
+    font-family: var(--codeFont);
+    font-size: 0.8rem;
+    margin: 0.4rem 0 0;
+  }
+
+  .dash-hero-marks { align-items: center; display: flex; flex: 0 0 auto; }
+  .dash-hero-pair { align-items: center; display: flex; gap: 0.85rem; }
+  .dash-hero-x { color: var(--gray); font-size: 1.1rem; }
+
+  .dash-client-logo { display: block; max-height: 2.5rem; max-width: 11rem; width: auto; }
+
+  // currentColor, so the mark inherits the accent that already differs between
+  // light and dark mode rather than hardcoding mint on a white background.
+  .dash-loomery-mark { color: var(--secondary); height: 1.75rem; width: 1.75rem; }
+}
+
+@media #{$mobile} {
+  .dash-hero {
+    .dash-hero-titles { flex-basis: 100%; }
+    .dash-heading { font-size: 1.9rem; }
+  }
+}
+
+.dash-chrome-toggle {
+  background: none;
+  border: 1px solid var(--dash-line);
+  border-radius: 99px;
+  color: var(--gray);
+  cursor: pointer;
+  font-family: var(--codeFont);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.7rem;
+
+  &:hover {
+    color: var(--secondary);
+    border-color: var(--secondary);
+  }
+}
+
+// Collapsed chrome: the dashboard's whole job is a wide overview, and it is the
+// one page where the explorer is redundant because the dashboard already links
+// everywhere.
+//
+// Gated on `:has(.dashboard)` so the rule can only ever fire on a page that
+// actually contains a dashboard. `data-chrome` is written onto #quartz-root by
+// page-shell for this emitter alone, but the extra gate means that even if the
+// attribute appeared on another page it could not collapse that page's grid.
+#quartz-root[data-chrome="collapsed"] {
+  & #quartz-body:has(.dashboard) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "grid-header" "grid-center" "grid-footer";
+
+    & > .left.sidebar,
+    & > .right.sidebar {
+      display: none;
+    }
+  }
+}
+
+.dash-card {
+  background: var(--lightgray);
+  border: 1px solid var(--dash-line);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+}
+
+.dash-label {
+  align-items: center;
+  color: var(--gray);
+  display: flex;
+  font-family: var(--codeFont);
+  font-size: 0.62rem;
+  justify-content: space-between;
+  letter-spacing: 0.14em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.dash-pill {
+  border: 1px solid var(--dash-line);
+  border-radius: 99px;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.45rem;
+
+  &--stated { color: var(--secondary); }
+  &--assessed { color: var(--dash-amber); }
+  &--mixed { color: var(--gray); }
+}
+
+.dash-muted { color: var(--gray); font-size: 0.78rem; }
+.dash-footnote { margin: 0.7rem 0 0; }
+
+.dash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  & > li {
+    border-top: 1px solid var(--dash-line);
+    font-size: 0.86rem;
+    padding: 0.45rem 0;
+
+    &:first-child { border-top: none; }
+  }
+}
+
+.dash-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.dash-chip {
+  border: 1px solid var(--dash-line);
+  border-radius: 99px;
+  color: var(--darkgray);
+  font-family: var(--codeFont);
+  font-size: 0.7rem;
+  padding: 0.15rem 0.6rem;
+  text-decoration: none;
+
+  &:hover { border-color: var(--secondary); color: var(--secondary); }
+  &--wired { color: var(--secondary); }
+  &--partial { color: var(--dash-amber); }
+  &--absent { color: var(--gray); }
+  &--role b { color: var(--secondary); font-weight: 500; }
+}
+
+// --- summary ---------------------------------------------------------------
+
+.dash-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.1rem;
+}
+
+.dash-summary-text { flex: 1 1 14rem; }
+.dash-summary-headline { color: var(--dark); font-size: 0.98rem; }
+
+.dash-rag {
+  border-radius: 50%;
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+
+  &--green { background: var(--secondary); }
+  &--amber { background: var(--dash-amber); }
+  &--red { background: var(--dash-red); }
+}
+
+.dash-counters { display: flex; gap: 1.1rem; text-align: center; }
+
+.dash-counter {
+  b { color: var(--dark); display: block; font-family: var(--codeFont); font-size: 1.15rem; line-height: 1.1; }
+  span { color: var(--gray); font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  &--behind b { color: var(--dash-red); }
+  &--attention b { color: var(--dash-amber); }
+}
+
+.dash-delta { font-size: 0.9rem; line-height: 1.55; margin: 0; }
+
+// --- fisheye timeline ------------------------------------------------------
+//
+// The bar is aria-hidden and the .dash-spine list is the accessible content.
+// Below $mobile the bar is removed entirely and the spine becomes the visible
+// timeline — dates alone need ~70px each, so no horizontal treatment survives a
+// phone. Between the two, milestone names are dropped and the bar scrolls if
+// even the dates will not fit.
+
+.dash-fisheye {
+  display: flex;
+  height: 4.1rem;
+  margin: 0.2rem 0 0;
+}
+
+.dash-seg {
+  border-right: 1px solid var(--dash-line);
+  flex-grow: 0;
+  flex-shrink: 0;
+  position: relative;
+
+  &:last-child { border-right: none; }
+  &--current { background: color-mix(in oklab, var(--darkgray) 5%, transparent); }
+}
+
+.dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 1.7rem; }
+.dash-seg--past .dash-track { background: color-mix(in oklab, var(--secondary) 32%, transparent); }
+.dash-fill { background: var(--secondary); height: 6px; left: 0; opacity: 0.75; position: absolute; top: 1.7rem; }
+
+.dash-node {
+  background: color-mix(in oklab, var(--gray) 45%, transparent);
+  border: 2px solid var(--light);
+  border-radius: 50%;
+  height: 12px;
+  position: absolute;
+  top: 1.55rem;
+  transform: translateX(-50%);
+  width: 12px;
+
+  &--done { background: var(--secondary); }
+}
+
+.dash-node-name,
+.dash-node-date {
+  color: var(--gray);
+  font-size: 0.6rem;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.dash-node-name { top: 0.15rem; }
+.dash-node-date { font-family: var(--codeFont); top: 2.85rem; }
+
+.dash-today { background: var(--dark); height: 1.65rem; position: absolute; top: 1.1rem; transform: translateX(-50%); width: 3px; }
+.dash-today-label { color: var(--dark); font-family: var(--codeFont); font-size: 0.6rem; position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+
+.dash-legend {
+  border-top: 1px solid var(--dash-line);
+  color: var(--gray);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  gap: 0.3rem 1rem;
+  justify-content: space-between;
+  margin: 0.9rem 0 0;
+  padding-top: 0.7rem;
+
+  strong { color: var(--darkgray); font-weight: 500; }
+  .dash-legend-next { color: var(--dash-amber); strong { color: var(--dash-amber); } }
+  .dash-legend-next--over { color: var(--dash-red); strong { color: var(--dash-red); } }
+}
+
+.dash-plainbar {
+  background: color-mix(in oklab, var(--gray) 30%, transparent);
+  border-radius: 99px;
+  height: 8px;
+  margin: 0.3rem 0;
+  position: relative;
+
+  .dash-track { display: none; }
+  .dash-fill { border-radius: 99px; top: 0; }
+  .dash-today { height: 1rem; top: -4px; }
+}
+
+// The spine: accessible representation always, visible timeline below $mobile.
+// Visually hidden rather than display:none on wide screens, so a screen reader
+// still reaches it while the bar carries the visual weight.
+.dash-spine {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  list-style: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.dash-spine-row {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: 4.6rem 1fr;
+  padding: 0.5rem 0;
+  position: relative;
+
+  time { color: var(--gray); font-family: var(--codeFont); font-size: 0.7rem; text-align: right; }
+  &--done time { color: var(--secondary); }
+  &--today {
+    background: color-mix(in oklab, var(--darkgray) 6%, transparent);
+    border-radius: 5px;
+    time, span { color: var(--dark); }
+  }
+}
+
+@media #{$mobile} {
+  .dash-fisheye { display: none; }
+
+  .dash-spine {
+    clip: auto;
+    clip-path: none;
+    height: auto;
+    overflow: visible;
+    position: static;
+    white-space: normal;
+    width: auto;
+
+    .dash-spine-row {
+      border-left: 2px solid var(--dash-line);
+      margin-left: 4.6rem;
+      padding-left: 1rem;
+
+      time { left: -5.6rem; position: absolute; width: 4.6rem; }
+    }
+  }
+}
+
+// Between mobile and desktop the names cannot fit; keep the dates and let the
+// bar scroll rather than overlapping labels.
+@media #{$tablet} {
+  .dash-node-name { display: none; }
+  .dash-fisheye { overflow-x: auto; }
+  .dash-seg { min-width: 4.5rem; }
+}
+
+// --- people, effort, activity ----------------------------------------------
+
+.dash-person {
+  align-items: start;
+  border-top: 1px solid var(--dash-line);
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: 9.5rem 1fr 5rem;
+  padding: 0.6rem 0;
+
+  &:first-child { border-top: none; }
+}
+
+.dash-person-who {
+  b { color: var(--dark); display: block; font-size: 0.86rem; font-weight: 500; }
+  span { color: var(--gray); font-size: 0.68rem; }
+}
+.dash-person-focus { font-size: 0.84rem; }
+
+.dash-state {
+  font-family: var(--codeFont);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-align: right;
+
+  &--on-track { color: var(--secondary); }
+  &--awaiting { color: var(--dash-amber); }
+  &--blocked { color: var(--dash-red); }
+  &--idle { color: var(--gray); }
+}
+
+.dash-burn {
+  background: color-mix(in oklab, var(--gray) 30%, transparent);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+  position: relative;
+
+  span { bottom: 0; position: absolute; top: 0; }
+}
+.dash-burn-used { background: var(--secondary); left: 0; opacity: 0.75; }
+.dash-burn-flight { background: var(--dash-amber); opacity: 0.6; }
+.dash-burn-legend { margin: 0.6rem 0 0; }
+.dash-burn-key--used { color: var(--secondary); }
+.dash-burn-key--flight { color: var(--dash-amber); }
+
+.dash-activity { display: grid; gap: 1.6rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.dash-activity-heading { margin: 0 0 0.35rem; }
+
+.dash-sev {
+  border-radius: 50%;
+  display: inline-block;
+  height: 6px;
+  margin-right: 0.5rem;
+  vertical-align: 1px;
+  width: 6px;
+
+  &--high { background: var(--dash-red); }
+  &--medium { background: var(--dash-amber); }
+  &--low { background: var(--gray); }
+  &--none { background: color-mix(in oklab, var(--gray) 45%, transparent); }
+}
+
+.dash-next-row {
+  time { color: var(--gray); font-family: var(--codeFont); font-size: 0.72rem; margin-right: 0.5rem; }
+  &--soon time { color: var(--dash-amber); }
+}
+
+// Two-across on a wide (chrome-collapsed) page: these modules are terse enough
+// to pair, and pairing them keeps the fold higher.
+@media #{$desktop} {
+  #quartz-root[data-chrome="collapsed"] .dashboard {
+    #attention, #decisions { grid-column: span 1; }
+  }
+}

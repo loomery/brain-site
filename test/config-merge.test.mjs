@@ -1,6 +1,16 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import YAML from "yaml"
 import { mergeConfig, TIMELINE_DEFAULTS } from "../src/config/merge.mjs"
+
+const BASE_PATH = fileURLToPath(new URL("../assets/quartz.config.base.yaml", import.meta.url))
+
+function baseFixture() {
+  return YAML.parse(fs.readFileSync(BASE_PATH, "utf8"))
+}
 
 const base = () => ({
   configuration: { pageTitle: "{{PROJECT_NAME}} Brain", baseUrl: "localhost:8080" },
@@ -52,4 +62,56 @@ test("timeline source and route fall back to their defaults", () => {
 
 test("the exported timeline defaults are the single source of truth", () => {
   assert.deepEqual(TIMELINE_DEFAULTS, { source: "logs", route: "/logs" })
+})
+
+// ---------------------------------------------------------------------------
+// Dashboard emitter options
+//
+// The package may know a brain's *conventions* but never its *paths*, so the two
+// dashboard filenames are fixed here while their location comes from rootDir —
+// the same division resolveOverridePaths already applies to content and the
+// timeline source.
+
+function dashboardOptionsOf(merged) {
+  return merged.plugins.find((p) => p.source.includes("dashboard-emitter")).options
+}
+
+test("the dashboard emitter is enabled and given absolute paths for both files", () => {
+  const merged = mergeConfig(baseFixture(), { content: "/brains/acme/docs" }, "/brains/acme")
+  const plugin = merged.plugins.find((p) => p.source.includes("dashboard-emitter"))
+  assert.equal(plugin.enabled, true)
+  assert.equal(plugin.options.facts, path.join("/brains/acme", "dashboard.yaml"))
+  assert.equal(plugin.options.status, path.join("/brains/acme", "dashboard.status.yaml"))
+  assert.equal(plugin.options.rootDir, "/brains/acme")
+  assert.equal(plugin.options.contentDir, "/brains/acme/docs")
+})
+
+test("the dashboard emitter receives the effective pageTitle for its heading fallback", () => {
+  const merged = mergeConfig(baseFixture(), { pageTitle: "Acme Brain" }, "/brains/acme")
+  assert.equal(dashboardOptionsOf(merged).pageTitle, "Acme Brain")
+})
+
+test("logsDir is passed only when a timeline section is configured", () => {
+  const withTimeline = mergeConfig(
+    baseFixture(),
+    { sections: { timeline: { source: "/brains/acme/logs" } } },
+    "/brains/acme",
+  )
+  assert.equal(dashboardOptionsOf(withTimeline).logsDir, "/brains/acme/logs")
+
+  const without = mergeConfig(baseFixture(), {}, "/brains/acme")
+  assert.equal(dashboardOptionsOf(without).logsDir, undefined)
+})
+
+test("omitting rootDir still yields a valid config, with no file paths", () => {
+  const merged = mergeConfig(baseFixture(), { pageTitle: "Acme Brain" })
+  const options = dashboardOptionsOf(merged)
+  assert.equal(options.facts, undefined)
+  assert.equal(options.status, undefined)
+  assert.equal(options.pageTitle, "Acme Brain")
+})
+
+test("no plugin entry references the retired home-emitter", () => {
+  const merged = mergeConfig(baseFixture(), {}, "/brains/acme")
+  assert.equal(merged.plugins.some((p) => p.source.includes("home-emitter")), false)
 })

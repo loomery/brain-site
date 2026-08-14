@@ -1,0 +1,14 @@
+generatedAt: 2026-08-10
+since: 2026-08-01
+status: { rag: green, headline: All on track }
+delta: Beta scope agreed.
+attention:
+  - { text: One open risk, detail: being handled, severity: medium }
+decisions:
+  - { text: Chose approach A, by: Ada, date: 2026-08-05 }
+people:
+  - { name: Ada Lovelace, focus: Beta build, detail: on schedule, state: on-track }
+keyReads:
+  - { slug: engagement, why: start here }
+sources:
+  - { name: Slack, state: wired }

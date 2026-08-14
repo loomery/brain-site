@@ -332,6 +332,12 @@ export async function pageShell(
   // it is the one caller that can be *writing* that exact file, so it must
   // never treat its own (possibly still-empty) output as a donor for itself.
   donorExclude: Iterable<string> = [],
+  // Extra attributes to write onto #quartz-root, verbatim (e.g.
+  // `data-chrome="collapsed"`). Empty by default so existing callers
+  // (onboarding-emitter.ts, logs-timeline-emitter.ts) are unaffected. Inert for
+  // every other page because nothing styles it without `.dashboard` present —
+  // see _dashboard.scss's `#quartz-root[data-chrome="collapsed"]` rule.
+  rootAttrs: string = "",
 ): Promise<string> {
   const hashed = ctx.hashedResourceNames ?? {}
   const indexCss = hashed["index.css"] ?? "index.css"
@@ -366,7 +372,7 @@ ${headCss}
 ${beforeDomJs}
 </head>
 <body data-slug="${escapeHtml(slug)}">
-<div id="quartz-root" class="page" data-frame="default">
+<div id="quartz-root" class="page" data-frame="default"${rootAttrs ? ` ${rootAttrs}` : ""}>
 <div id="quartz-body">
 <div class="left sidebar">${chrome.left}</div>
 <div class="center">
@@ -410,9 +416,10 @@ export async function emitPage(
   loggerLabel: string,
   tocHtml: string = "",
   donorExclude: Iterable<string> = [],
+  rootAttrs: string = "",
 ): Promise<FilePath> {
   try {
-    const html = await pageShell(ctx, resources, slug, title, bodyHtml, tocHtml, donorExclude)
+    const html = await pageShell(ctx, resources, slug, title, bodyHtml, tocHtml, donorExclude, rootAttrs)
     return await writeHtml(ctx, slug, html)
   } catch (err) {
     const message = err instanceof Error ? (err.stack ?? err.message) : String(err)

@@ -180,6 +180,32 @@ function onboardingCounts(content: QuartzContent[]): Array<{ role: string; count
   }
 }
 
+const CHROME_STORAGE_KEY = "brain-site-chrome"
+
+// Runs inline, before the dashboard markup, so a stored "expanded" preference is
+// applied before first paint. Deferring it to afterDOMReady would show the
+// collapsed layout and then jump.
+//
+// Written as a plain (non-module) inline script that is idempotent — it only
+// reads storage and sets an attribute — because Quartz's SPA router re-inserts
+// body content on navigation and a script with side effects would double them.
+const CHROME_SCRIPT =
+  `<script data-persist="true">(function(){try{` +
+  `var v=localStorage.getItem(${JSON.stringify(CHROME_STORAGE_KEY)});` +
+  `if(v==="expanded"){var r=document.getElementById("quartz-root");` +
+  `if(r){r.setAttribute("data-chrome","expanded");}}` +
+  `}catch(e){}})()</script>`
+
+const CHROME_TOGGLE =
+  `<button type="button" class="dash-chrome-toggle" aria-pressed="true" ` +
+  `title="Show or hide the sidebars" onclick="(function(b){` +
+  `var r=document.getElementById('quartz-root');` +
+  `var next=r.getAttribute('data-chrome')==='expanded'?'collapsed':'expanded';` +
+  `r.setAttribute('data-chrome',next);` +
+  `b.setAttribute('aria-pressed',String(next==='collapsed'));` +
+  `try{localStorage.setItem(${JSON.stringify(CHROME_STORAGE_KEY)},next);}catch(e){}` +
+  `})(this)">Sidebars</button>`
+
 function renderModules(vm: Record<string, unknown>): string {
   const rendered: string[] = []
   for (const module of MODULES) {
@@ -230,8 +256,15 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
       today: todayIso(),
     })
 
-    const heading = `<h1 class="dash-heading">${escapeHtml(String(vm.heading))}</h1>`
-    const body = `<div class="dashboard">${heading}${renderModules(vm)}</div>`
+    const heading =
+      `<div class="dash-header">` +
+      `<h1 class="dash-heading">${escapeHtml(String(vm.heading))}</h1>` +
+      (vm.subtitle === null
+        ? ""
+        : `<p class="dash-subtitle">${escapeHtml(String(vm.subtitle))}</p>`) +
+      CHROME_TOGGLE +
+      `</div>`
+    const body = `${CHROME_SCRIPT}<div class="dashboard">${heading}${renderModules(vm)}</div>`
 
     return [
       await emitPage(
@@ -243,6 +276,7 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
         "DashboardEmitter",
         "",
         ["index"],
+        'data-chrome="collapsed"',
       ),
     ]
   },

@@ -323,3 +323,21 @@ test("the facts-only fixture omits every assessed module but keeps the stated on
   assert.match(html, /id="status"/)
   assert.equal(html.includes("dash-rag--"), false)
 })
+
+test("the page declares collapsed chrome by default and offers a toggle", async () => {
+  const dir = tmpDir("dash-chrome")
+  const { html } = await emitTo(dir)
+  assert.match(html, /data-chrome="collapsed"/)
+  assert.match(html, /class="dash-chrome-toggle"/)
+  assert.match(html, /aria-pressed="true"/)
+})
+
+test("the chrome preference is restored from localStorage before paint", async () => {
+  const dir = tmpDir("dash-chrome-restore")
+  const { html } = await emitTo(dir)
+  assert.match(html, /localStorage/)
+  assert.match(html, /brain-site-chrome/)
+  // Must run inline in the body, not deferred: a class applied after paint
+  // produces a visible layout jump.
+  assert.equal(html.indexOf("brain-site-chrome") < html.indexOf('class="dashboard"'), true)
+})

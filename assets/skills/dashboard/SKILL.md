@@ -81,6 +81,29 @@ sources:                       # what this brain is wired to
   - { name: Miro, state: partial, note: why it is only partial }
 ```
 
+### What belongs in `sources:`
+
+**Derive this list from the brain's own `sources.yaml`, and keep its order.** That
+file is the register of what this brain is actually wired to; `.mcp.json` tells you
+which of those have a project-scoped MCP server. Between them they are the truth,
+and the dashboard should agree with them rather than with anyone's recollection.
+
+The three states mean:
+
+- `wired` — declared in `sources.yaml` and readable.
+- `partial` — declared, but you cannot fully read it, or what is in the docs came
+  from somewhere other than a live read. Say which in `note:` — that is the whole
+  value of this state.
+- `absent` — declared in `sources.yaml` (or clearly expected for this engagement)
+  but **not** connected yet. This is a gap someone should close.
+
+**Do not list a tool merely because the project does not use it.** A brain's
+onboarding notes often record tools that were considered and ruled out — "Linear,
+Notion, Figma and Monday.com are not in use on this engagement". Those are settled
+decisions, not gaps, and rendering them as `absent` chips makes a healthy brain
+look half-connected. If it is not in `sources.yaml` and nobody expects it, leave it
+out entirely.
+
 ### Choosing a RAG rating
 
 Rate delivery risk, not mood. `green` — nothing needs a decision this week.

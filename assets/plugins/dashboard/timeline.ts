@@ -40,29 +40,42 @@ function agoDays(days: number): string {
   return `${days} days ago`
 }
 
+// `index` is the node's position along the whole bar, and it decides which side of
+// the track the name sits on: even above, odd below. Alternating roughly doubles
+// the horizontal room each label has, because a label's neighbours are on the
+// opposite side and so cannot collide with it.
+//
+// The side is computed here rather than in CSS because CSS would have to infer it
+// from `nth-child` on the *segment*, and the final node breaks that: it is the
+// second name inside the last segment, so it shares that segment's parity and
+// would land on the same side as its own neighbour. The renderer knows the real
+// index, so it just says.
 function nodeMarkup(
   node: { date: string; name: string; done: boolean; synthetic: boolean },
   atEnd: boolean,
+  index: number,
 ): string {
   const position = atEnd ? "left:100%" : "left:0"
   const classes = ["dash-node", node.done ? "dash-node--done" : "", node.synthetic ? "dash-node--bound" : ""]
     .filter(Boolean)
     .join(" ")
+  const side = index % 2 === 0 ? "above" : "below"
   return (
     `<span class="${classes}" style="${position}"></span>` +
-    `<span class="dash-node-name" style="${position}">${escapeHtml(node.name)}</span>` +
+    `<span class="dash-node-name dash-node-name--${side}" style="${position}">${escapeHtml(node.name)}</span>` +
     `<span class="dash-node-date" style="${position}">${escapeHtml(formatShortDate(node.date))}</span>`
   )
 }
 
 function barMarkup(segments: any[]): string {
-  const parts = segments.map((segment) => {
+  const parts = segments.map((segment, i) => {
     const inner: string[] = [`<span class="dash-track"></span>`]
     if (segment.kind === "current" && segment.today !== null) {
       inner.push(`<span class="dash-fill" style="width:${segment.today.offsetPct}%"></span>`)
     }
-    inner.push(nodeMarkup(segment.startNode, false))
-    if (segment.endNode !== null) inner.push(nodeMarkup(segment.endNode, true))
+    inner.push(nodeMarkup(segment.startNode, false, i))
+    // The end node is one further along the bar than the last segment's start.
+    if (segment.endNode !== null) inner.push(nodeMarkup(segment.endNode, true, i + 1))
     if (segment.kind === "current" && segment.today !== null) {
       const left = `left:${segment.today.offsetPct}%`
       inner.push(`<span class="dash-today" style="${left}"></span>`)

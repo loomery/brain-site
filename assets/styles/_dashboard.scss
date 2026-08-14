@@ -230,14 +230,14 @@
 
 .dash-fisheye {
   display: flex;
-  height: 5rem;
+  height: 5.6rem;
   margin: 0.2rem 0 0;
 }
 
-// Below this the bar cannot carry names whatever the viewport says. Dates alone
-// still fit, and the spine list underneath carries every name for anyone who
-// needs them.
-@container (max-width: 900px) {
+// Names alternate sides, so they survive a far narrower bar than a single row
+// would. Only below this does even alternating stop fitting — and the spine list
+// underneath still carries every name.
+@container (max-width: 520px) {
   .dash-node-name { display: none; }
 }
 
@@ -251,9 +251,9 @@
   &--current { background: color-mix(in oklab, var(--darkgray) 5%, transparent); }
 }
 
-.dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 2.1rem; }
+.dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 1.7rem; }
 .dash-seg--past .dash-track { background: color-mix(in oklab, var(--secondary) 32%, transparent); }
-.dash-fill { background: var(--secondary); height: 6px; left: 0; opacity: 0.75; position: absolute; top: 2.1rem; }
+.dash-fill { background: var(--secondary); height: 6px; left: 0; opacity: 0.75; position: absolute; top: 1.7rem; }
 
 .dash-node {
   background: color-mix(in oklab, var(--gray) 45%, transparent);
@@ -261,7 +261,7 @@
   border-radius: 50%;
   height: 12px;
   position: absolute;
-  top: 1.95rem;
+  top: 1.55rem;
   transform: translateX(-50%);
   width: 12px;
 
@@ -276,12 +276,13 @@
   transform: translateX(-50%);
   white-space: nowrap;
 }
-// Staggered onto two rows: adjacent nodes in a compressed stretch of the bar sit
-// close enough that one row collides. Alternating halves the density without
-// dropping any label.
-.dash-node-name { top: 0; }
-.dash-seg:nth-child(even) .dash-node-name { top: 1rem; }
-.dash-node-date { font-family: var(--codeFont); top: 3rem; }
+// Names alternate above and below the track (the side is set in timeline.ts, which
+// knows each node's real index along the bar). A label's neighbours are therefore
+// always on the opposite side, which roughly doubles the horizontal room each one
+// has before it could collide.
+.dash-node-name--above { top: 0.15rem; }
+.dash-node-name--below { top: 3.4rem; }
+.dash-node-date { font-family: var(--codeFont); top: 2.45rem; }
 
 // The first and last nodes sit exactly on the bar's ends, so centring their
 // labels pushes half of each outside the container — measured in a real build as
@@ -297,7 +298,7 @@
   .dash-node-date[style*="left:100%"] { transform: translateX(-100%); }
 }
 
-.dash-today { background: var(--dark); height: 1.7rem; position: absolute; top: 1.55rem; transform: translateX(-50%); width: 3px; z-index: 2; }
+.dash-today { background: var(--dark); height: 1.7rem; position: absolute; top: 1.15rem; transform: translateX(-50%); width: 3px; z-index: 2; }
 
 // Sits in the same band as the node names, so on a narrow current gap it landed
 // on top of the next milestone's name. An opaque background plus a z-index keeps
@@ -312,7 +313,7 @@
   font-family: var(--codeFont);
   font-size: 0.6rem;
   position: absolute;
-  top: 3.9rem;
+  top: 4.6rem;
   transform: translateX(-50%);
   white-space: nowrap;
   z-index: 3;
@@ -409,8 +410,13 @@
 
 // Between mobile and desktop the names cannot fit; keep the dates and let the
 // bar scroll rather than overlapping labels.
+// Deliberately no `.dash-node-name { display: none }` here. This block used to
+// hide names across the whole tablet viewport range as a proxy for "the bar is
+// too narrow", but viewport width is the wrong measure — the width actually
+// available depends on whether the page chrome is expanded. The container query
+// above decides it from the bar's own width instead, and this rule would simply
+// override it (a 933px bar on a 1020px viewport lost its names to this line).
 @media #{$tablet} {
-  .dash-node-name { display: none; }
   .dash-fisheye { overflow-x: auto; }
   .dash-seg { min-width: 4.5rem; }
 }

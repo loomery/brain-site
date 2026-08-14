@@ -42,7 +42,7 @@
   }
 
   .dash-subtitle {
-    color: var(--gray);
+    color: var(--darkgray);
     font-family: var(--codeFont);
     font-size: 0.8rem;
     margin: 0.4rem 0 0;
@@ -54,9 +54,11 @@
 
   .dash-client-logo { display: block; max-height: 2.5rem; max-width: 11rem; width: auto; }
 
-  // currentColor, so the mark inherits the accent that already differs between
-  // light and dark mode rather than hardcoding mint on a white background.
-  .dash-loomery-mark { color: var(--secondary); height: 1.75rem; width: 1.75rem; }
+  // currentColor, resolving to the page's own foreground token — black in light
+  // mode, near-white in dark mode. Was --secondary (mint/indigo); changed after
+  // design feedback that the accent colour read as low-contrast against a white
+  // background.
+  .dash-loomery-mark { color: var(--dark); height: 1.75rem; width: 1.75rem; }
 }
 
 @media #{$mobile} {
@@ -70,7 +72,7 @@
   background: none;
   border: 1px solid var(--dash-line);
   border-radius: 99px;
-  color: var(--gray);
+  color: var(--darkgray);
   cursor: pointer;
   font-family: var(--codeFont);
   font-size: 0.7rem;
@@ -111,38 +113,41 @@
   }
 }
 
+// White background with a coloured outline, not a grey wash: design feedback
+// was that dark-grey text on the previous --lightgray card background read as
+// grey-on-grey. --secondary resolves to indigo in light mode and mint in dark
+// mode, so "coloured outline" stays a real theme token rather than a new
+// literal. Corners are squared per the same feedback.
 .dash-card {
-  background: var(--lightgray);
-  border: 1px solid var(--dash-line);
-  border-radius: 8px;
+  background: var(--light);
+  border: 1px solid var(--secondary);
+  border-radius: 0;
   padding: 1rem 1.15rem;
 }
 
+// A plain card heading, not the tiny-caps "eyebrow" treatment this used to
+// carry (uppercase, heavy letter-spacing, muted colour) — removed per design
+// feedback.
 .dash-label {
   align-items: center;
-  color: var(--gray);
+  color: var(--dark);
   display: flex;
-  font-family: var(--codeFont);
-  font-size: 0.62rem;
+  font-family: var(--headerFont);
+  font-size: 0.95rem;
+  font-weight: 600;
   justify-content: space-between;
-  letter-spacing: 0.14em;
   margin: 0 0 0.75rem;
-  text-transform: uppercase;
 }
 
+// Hidden, not removed: design feedback was against the visible pill badge
+// specifically ("AI loves them"). The underlying stated/assessed/mixed
+// provenance still reaches the markup — card() still emits it — so a future
+// pass can restyle this back in without re-touching every module.
 .dash-pill {
-  border: 1px solid var(--dash-line);
-  border-radius: 99px;
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  padding: 0.1rem 0.45rem;
-
-  &--stated { color: var(--secondary); }
-  &--assessed { color: var(--dash-amber); }
-  &--mixed { color: var(--gray); }
+  display: none;
 }
 
-.dash-muted { color: var(--gray); font-size: 0.78rem; }
+.dash-muted { color: var(--darkgray); font-size: 0.78rem; }
 .dash-footnote { margin: 0.7rem 0 0; }
 
 .dash-list {
@@ -204,7 +209,7 @@
 
 .dash-counter {
   b { color: var(--dark); display: block; font-family: var(--codeFont); font-size: 1.15rem; line-height: 1.1; }
-  span { color: var(--gray); font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  span { color: var(--darkgray); font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase; }
   &--behind b { color: var(--dash-red); }
   &--attention b { color: var(--dash-amber); }
 }
@@ -248,7 +253,11 @@
   position: relative;
 
   &:last-child { border-right: none; }
-  &--current { background: color-mix(in oklab, var(--darkgray) 5%, transparent); }
+  // Was a 5% darkgray tint — nearly invisible, one of the things design feedback
+  // called out as "hard to read". A visible wash of the same brand colour the
+  // card border now uses ties the highlight to that same accent instead of
+  // introducing a second one.
+  &--current { background: color-mix(in oklab, var(--secondary) 10%, transparent); }
 }
 
 .dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 1.7rem; }
@@ -268,10 +277,14 @@
   &--done { background: var(--secondary); }
 }
 
+// Size and colour bumped from an earlier pass (0.6rem, --gray) as part of a
+// general timeline-legibility pass — the smallest, lowest-contrast text on the
+// page was also the text carrying the most information (every milestone's name
+// and date).
 .dash-node-name,
 .dash-node-date {
-  color: var(--gray);
-  font-size: 0.6rem;
+  color: var(--darkgray);
+  font-size: 0.68rem;
   position: absolute;
   transform: translateX(-50%);
   white-space: nowrap;
@@ -298,22 +311,26 @@
   .dash-node-date[style*="left:100%"] { transform: translateX(-100%); }
 }
 
-.dash-today { background: var(--dark); height: 1.7rem; position: absolute; top: 1.15rem; transform: translateX(-50%); width: 3px; z-index: 2; }
+.dash-today { background: var(--secondary); height: 1.7rem; position: absolute; top: 1.15rem; transform: translateX(-50%); width: 3px; z-index: 2; }
 
-// Sits in the same band as the node names, so on a narrow current gap it landed
-// on top of the next milestone's name. An opaque background plus a z-index keeps
-// it legible wherever it falls, rather than moving it somewhere with its own
-// collisions.
-// Below the date row, not in the name band. It previously sat at top:0 with an
-// opaque background, which did not resolve the collision — it just painted over
-// the milestone name underneath ("day 1 of 3" covering "Survey responses due").
-// Nothing occupies this band, so no masking is needed.
+// Below the date row, not in the name band — an earlier version sat at top:0
+// with an opaque background, which didn't resolve a collision, it just painted
+// over the milestone name underneath ("day 1 of 3" covering "Survey responses
+// due"). Nothing occupies this band, so no masking is needed.
+//
+// Given its own small squared box (not a rounded pill — see the card and
+// pill-removal changes above) so it reads as a distinct callout rather than
+// floating text easily lost among the date row above it.
 .dash-today-label {
-  color: var(--dark);
+  background: color-mix(in oklab, var(--secondary) 12%, transparent);
+  border: 1px solid var(--secondary);
+  color: var(--secondary);
   font-family: var(--codeFont);
-  font-size: 0.6rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
   position: absolute;
-  top: 4.6rem;
+  top: 4.5rem;
   transform: translateX(-50%);
   white-space: nowrap;
   z-index: 3;
@@ -321,7 +338,7 @@
 
 .dash-legend {
   border-top: 1px solid var(--dash-line);
-  color: var(--gray);
+  color: var(--darkgray);
   display: flex;
   flex-wrap: wrap;
   font-size: 0.78rem;
@@ -330,7 +347,7 @@
   margin: 0.9rem 0 0;
   padding-top: 0.7rem;
 
-  strong { color: var(--darkgray); font-weight: 500; }
+  strong { color: var(--dark); font-weight: 600; }
   .dash-legend-next { color: var(--dash-amber); strong { color: var(--dash-amber); } }
   .dash-legend-next--over { color: var(--dash-red); strong { color: var(--dash-red); } }
 }
@@ -370,7 +387,7 @@
   padding: 0.5rem 0;
   position: relative;
 
-  time { color: var(--gray); font-family: var(--codeFont); font-size: 0.7rem; text-align: right; }
+  time { color: var(--darkgray); font-family: var(--codeFont); font-size: 0.7rem; text-align: right; }
   &--done time { color: var(--secondary); }
   &--today {
     background: color-mix(in oklab, var(--darkgray) 6%, transparent);
@@ -436,7 +453,7 @@
 
 .dash-person-who {
   b { color: var(--dark); display: block; font-size: 0.86rem; font-weight: 500; }
-  span { color: var(--gray); font-size: 0.68rem; }
+  span { color: var(--darkgray); font-size: 0.68rem; }
 }
 .dash-person-focus { font-size: 0.84rem; }
 
@@ -485,7 +502,7 @@
 }
 
 .dash-next-row {
-  time { color: var(--gray); font-family: var(--codeFont); font-size: 0.72rem; margin-right: 0.5rem; }
+  time { color: var(--darkgray); font-family: var(--codeFont); font-size: 0.72rem; margin-right: 0.5rem; }
   &--soon time { color: var(--dash-amber); }
 }
 

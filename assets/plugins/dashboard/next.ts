@@ -26,7 +26,7 @@ export const NextModule: DashboardModule = {
       const away = daysBetween(vm.today, item.date)
       const isSoon = away !== null && away <= SOON_DAYS
       const owner =
-        item.owner === null ? "" : ` <span class="dash-muted">— ${escapeHtml(item.owner)}</span>`
+        item.owner === null ? "" : ` <span class="dash-muted">· ${escapeHtml(item.owner)}</span>`
       return (
         `<span class="dash-next-row${isSoon ? " dash-next-row--soon" : ""}">` +
         `<time datetime="${escapeHtml(item.date)}">${escapeHtml(formatShortDate(item.date))}</time>` +

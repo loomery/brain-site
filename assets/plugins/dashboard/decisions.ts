@@ -23,7 +23,7 @@ export const DecisionsModule: DashboardModule = {
           typeof item.date === "string" ? escapeHtml(formatShortDate(item.date)) : null,
         ].filter(Boolean)
         const suffix =
-          meta.length > 0 ? ` <span class="dash-muted">— ${meta.join(", ")}</span>` : ""
+          meta.length > 0 ? ` <span class="dash-muted">· ${meta.join(", ")}</span>` : ""
         return `${escapeHtml(item.text)}${suffix}`
       })
 

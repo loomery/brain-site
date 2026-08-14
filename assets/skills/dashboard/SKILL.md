@@ -138,6 +138,12 @@ whatever you write here is exactly what the page will show until the next sync. 
 you cannot reach a source, say which one in the relevant `sources:` note rather
 than silently writing a status that looks fresher than it is.
 
+### Style
+
+No em dashes anywhere in `delta:`, `attention:`, `decisions:`, or any other prose
+field. Use a comma, a colon, a period, or two sentences instead — whichever reads
+most naturally for that sentence.
+
 ## Finish
 
 Validate before you finish:

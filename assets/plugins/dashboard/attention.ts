@@ -28,7 +28,7 @@ export const AttentionModule: DashboardModule = {
         const severity = typeof item.severity === "string" ? item.severity : "none"
         const detail =
           typeof item.detail === "string"
-            ? ` <span class="dash-muted">— ${escapeHtml(item.detail)}</span>`
+            ? ` <span class="dash-muted">· ${escapeHtml(item.detail)}</span>`
             : ""
         return (
           `<span class="dash-sev dash-sev--${escapeHtml(severity)}"></span>` +

@@ -196,15 +196,43 @@ const CHROME_SCRIPT =
   `if(r){r.setAttribute("data-chrome","expanded");}}` +
   `}catch(e){}})()</script>`
 
+// Pressed=true means the sidebars are shown (matching the button's own label,
+// "Sidebars"). Chrome starts collapsed, so the button starts unpressed.
+//
+// The onclick string is itself delimited by double quotes, so the storage key
+// must be spliced in with single quotes here — matching the single quotes
+// already used for 'quartz-root'/'expanded'/'collapsed' below — rather than
+// JSON.stringify's double-quoted output, which would terminate the attribute
+// early and truncate the handler silently (confirmed: the resulting onclick
+// parsed as a SyntaxError, "Unexpected token '}'", and the button rendered
+// fine because the *tag* still closed at the stray '>' later in the string,
+// hiding the break from visual inspection). CHROME_SCRIPT below is unaffected
+// by the same pattern because it sits in a <script> element's text content,
+// not an HTML attribute.
 const CHROME_TOGGLE =
-  `<button type="button" class="dash-chrome-toggle" aria-pressed="true" ` +
+  `<button type="button" class="dash-chrome-toggle" aria-pressed="false" ` +
   `title="Show or hide the sidebars" onclick="(function(b){` +
   `var r=document.getElementById('quartz-root');` +
   `var next=r.getAttribute('data-chrome')==='expanded'?'collapsed':'expanded';` +
   `r.setAttribute('data-chrome',next);` +
-  `b.setAttribute('aria-pressed',String(next==='collapsed'));` +
-  `try{localStorage.setItem(${JSON.stringify(CHROME_STORAGE_KEY)},next);}catch(e){}` +
+  `b.setAttribute('aria-pressed',String(next==='expanded'));` +
+  `try{localStorage.setItem('${CHROME_STORAGE_KEY}',next);}catch(e){}` +
   `})(this)">Sidebars</button>`
+
+// CHROME_SCRIPT runs before any dashboard markup exists (deliberately, to avoid
+// a layout jump — see its own comment), so it cannot reach the toggle button to
+// sync its aria-pressed state: the button isn't in the DOM yet when that script
+// runs. This second, idempotent script runs immediately after the header
+// markup (the button now exists) and mirrors #quartz-root's current
+// data-chrome onto the button — covering the case where CHROME_SCRIPT restored
+// an "expanded" preference but the button, rendered with its collapsed-default
+// aria-pressed="false", would otherwise still claim to be unpressed.
+const CHROME_SYNC =
+  `<script data-persist="true">(function(){try{` +
+  `var r=document.getElementById("quartz-root");` +
+  `var b=document.querySelector(".dash-chrome-toggle");` +
+  `if(r&&b){b.setAttribute("aria-pressed",String(r.getAttribute("data-chrome")==="expanded"));}` +
+  `}catch(e){}})()</script>`
 
 function renderModules(vm: Record<string, unknown>): string {
   const rendered: string[] = []
@@ -263,7 +291,8 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
         ? ""
         : `<p class="dash-subtitle">${escapeHtml(String(vm.subtitle))}</p>`) +
       CHROME_TOGGLE +
-      `</div>`
+      `</div>` +
+      CHROME_SYNC
     const body = `${CHROME_SCRIPT}<div class="dashboard">${heading}${renderModules(vm)}</div>`
 
     return [

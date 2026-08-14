@@ -329,7 +329,35 @@ test("the page declares collapsed chrome by default and offers a toggle", async 
   const { html } = await emitTo(dir)
   assert.match(html, /data-chrome="collapsed"/)
   assert.match(html, /class="dash-chrome-toggle"/)
-  assert.match(html, /aria-pressed="true"/)
+  // Pressed=true means sidebars are shown. Chrome starts collapsed, so the
+  // toggle must start unpressed — a button reading pressed=true while the
+  // sidebars it controls are hidden would be lying about its own state.
+  assert.match(html, /aria-pressed="false"/)
+})
+
+test("the toggle's onclick handler is syntactically valid JavaScript", async () => {
+  const dir = tmpDir("dash-chrome-onclick")
+  const { html } = await emitTo(dir)
+  const match = html.match(/onclick="([^"]*)"/)
+  assert.notEqual(match, null, "expected an onclick attribute on the toggle button")
+  const handlerSource = match[1]
+  // A truncated attribute (e.g. from an unescaped embedded double quote) either
+  // throws a SyntaxError here or silently drops the tail of the handler — the
+  // trailing-call check below catches the latter.
+  assert.doesNotThrow(() => new Function(handlerSource))
+  assert.equal(handlerSource.endsWith("(this)"), true, `handler was truncated: ${handlerSource}`)
+})
+
+test("the chrome-sync script appears after the toggle button", async () => {
+  const dir = tmpDir("dash-chrome-sync-order")
+  const { html } = await emitTo(dir)
+  const buttonCloseAt = html.indexOf("</button>")
+  assert.notEqual(buttonCloseAt, -1, "expected the toggle button to render")
+  // The sync script must reference the toggle (to find and update it), and that
+  // reference can only appear once the button itself has already closed — it
+  // cannot run before the button exists in the DOM.
+  const syncRefAt = html.indexOf("dash-chrome-toggle", buttonCloseAt)
+  assert.notEqual(syncRefAt, -1, "expected the sync script to reference the toggle after the button closes")
 })
 
 test("the chrome preference is restored from localStorage before paint", async () => {

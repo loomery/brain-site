@@ -182,9 +182,12 @@ function onboardingCounts(content: QuartzContent[]): Array<{ role: string; count
 
 const CHROME_STORAGE_KEY = "brain-site-chrome"
 
-// Runs inline, before the dashboard markup, so a stored "expanded" preference is
-// applied before first paint. Deferring it to afterDOMReady would show the
-// collapsed layout and then jump.
+// Runs inline, before the dashboard markup, so a stored preference is applied
+// before first paint. Deferring it to afterDOMReady would show the default layout
+// and then visibly jump.
+//
+// Only the non-default value needs restoring: the page is emitted expanded, so
+// this looks for a stored "collapsed".
 //
 // Written as a plain (non-module) inline script that is idempotent — it only
 // reads storage and sets an attribute — because Quartz's SPA router re-inserts
@@ -192,12 +195,12 @@ const CHROME_STORAGE_KEY = "brain-site-chrome"
 const CHROME_SCRIPT =
   `<script data-persist="true">(function(){try{` +
   `var v=localStorage.getItem(${JSON.stringify(CHROME_STORAGE_KEY)});` +
-  `if(v==="expanded"){var r=document.getElementById("quartz-root");` +
-  `if(r){r.setAttribute("data-chrome","expanded");}}` +
+  `if(v==="collapsed"){var r=document.getElementById("quartz-root");` +
+  `if(r){r.setAttribute("data-chrome","collapsed");}}` +
   `}catch(e){}})()</script>`
 
 // Pressed=true means the sidebars are shown (matching the button's own label,
-// "Sidebars"). Chrome starts collapsed, so the button starts unpressed.
+// "Sidebars"). Chrome starts expanded, so the button starts pressed.
 //
 // The onclick string is itself delimited by double quotes, so the storage key
 // must be spliced in with single quotes here — matching the single quotes
@@ -210,7 +213,7 @@ const CHROME_SCRIPT =
 // by the same pattern because it sits in a <script> element's text content,
 // not an HTML attribute.
 const CHROME_TOGGLE =
-  `<button type="button" class="dash-chrome-toggle" aria-pressed="false" ` +
+  `<button type="button" class="dash-chrome-toggle" aria-pressed="true" ` +
   `title="Show or hide the sidebars" onclick="(function(b){` +
   `var r=document.getElementById('quartz-root');` +
   `var next=r.getAttribute('data-chrome')==='expanded'?'collapsed':'expanded';` +
@@ -225,8 +228,8 @@ const CHROME_TOGGLE =
 // runs. This second, idempotent script runs immediately after the header
 // markup (the button now exists) and mirrors #quartz-root's current
 // data-chrome onto the button — covering the case where CHROME_SCRIPT restored
-// an "expanded" preference but the button, rendered with its collapsed-default
-// aria-pressed="false", would otherwise still claim to be unpressed.
+// a "collapsed" preference but the button, rendered with its expanded-default
+// aria-pressed="true", would otherwise still claim to be pressed.
 const CHROME_SYNC =
   `<script data-persist="true">(function(){try{` +
   `var r=document.getElementById("quartz-root");` +
@@ -321,7 +324,7 @@ export const DashboardEmitter: QuartzEmitterPlugin<DashboardOptions> = (opts = {
         "DashboardEmitter",
         "",
         ["index"],
-        'data-chrome="collapsed"',
+        'data-chrome="expanded"',
       ),
     ]
   },

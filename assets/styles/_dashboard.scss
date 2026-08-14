@@ -95,6 +95,15 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "grid-header" "grid-center" "grid-footer";
 
+    // The page's horizontal inset came from the sidebar columns, not from any
+    // padding — so collapsing them put the hero and every card flush against the
+    // viewport edge. Found by building a real brain and measuring: `heroLeft` was
+    // 0. Restore the inset explicitly, and cap the line length so the dashboard
+    // does not stretch to a 2000px monitor's full width.
+    max-width: 1500px;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+
     & > .left.sidebar,
     & > .right.sidebar {
       display: none;
@@ -210,10 +219,26 @@
 // phone. Between the two, milestone names are dropped and the bar scrolls if
 // even the dates will not fit.
 
+// container-type, so the fisheye responds to its own width rather than the
+// viewport's. This is the fix for a real defect: the name-hiding rule keyed off
+// viewport width, but the width actually available depends on whether the page
+// chrome is expanded — with sidebars open on a 1440px viewport the bar is only
+// 751px, and "Hack Week" overlapped "Synthesis & playback" by 89px.
+#timeline {
+  container-type: inline-size;
+}
+
 .dash-fisheye {
   display: flex;
-  height: 4.1rem;
+  height: 5rem;
   margin: 0.2rem 0 0;
+}
+
+// Below this the bar cannot carry names whatever the viewport says. Dates alone
+// still fit, and the spine list underneath carries every name for anyone who
+// needs them.
+@container (max-width: 900px) {
+  .dash-node-name { display: none; }
 }
 
 .dash-seg {
@@ -226,9 +251,9 @@
   &--current { background: color-mix(in oklab, var(--darkgray) 5%, transparent); }
 }
 
-.dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 1.7rem; }
+.dash-track { background: color-mix(in oklab, var(--gray) 30%, transparent); height: 6px; left: 0; position: absolute; right: 0; top: 2.1rem; }
 .dash-seg--past .dash-track { background: color-mix(in oklab, var(--secondary) 32%, transparent); }
-.dash-fill { background: var(--secondary); height: 6px; left: 0; opacity: 0.75; position: absolute; top: 1.7rem; }
+.dash-fill { background: var(--secondary); height: 6px; left: 0; opacity: 0.75; position: absolute; top: 2.1rem; }
 
 .dash-node {
   background: color-mix(in oklab, var(--gray) 45%, transparent);
@@ -236,7 +261,7 @@
   border-radius: 50%;
   height: 12px;
   position: absolute;
-  top: 1.55rem;
+  top: 1.95rem;
   transform: translateX(-50%);
   width: 12px;
 
@@ -251,11 +276,47 @@
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.dash-node-name { top: 0.15rem; }
-.dash-node-date { font-family: var(--codeFont); top: 2.85rem; }
+// Staggered onto two rows: adjacent nodes in a compressed stretch of the bar sit
+// close enough that one row collides. Alternating halves the density without
+// dropping any label.
+.dash-node-name { top: 0; }
+.dash-seg:nth-child(even) .dash-node-name { top: 1rem; }
+.dash-node-date { font-family: var(--codeFont); top: 3rem; }
 
-.dash-today { background: var(--dark); height: 1.65rem; position: absolute; top: 1.1rem; transform: translateX(-50%); width: 3px; }
-.dash-today-label { color: var(--dark); font-family: var(--codeFont); font-size: 0.6rem; position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+// The first and last nodes sit exactly on the bar's ends, so centring their
+// labels pushes half of each outside the container — measured in a real build as
+// `left: -6` on the first and `right: 1312` on a 1280px viewport, which scrolled
+// the whole page sideways. Align the outermost labels inward instead of centring
+// them; every label in between still centres on its node.
+.dash-seg:first-child {
+  .dash-node-name,
+  .dash-node-date { transform: translateX(0); }
+}
+.dash-seg:last-child {
+  .dash-node-name[style*="left:100%"],
+  .dash-node-date[style*="left:100%"] { transform: translateX(-100%); }
+}
+
+.dash-today { background: var(--dark); height: 1.7rem; position: absolute; top: 1.55rem; transform: translateX(-50%); width: 3px; z-index: 2; }
+
+// Sits in the same band as the node names, so on a narrow current gap it landed
+// on top of the next milestone's name. An opaque background plus a z-index keeps
+// it legible wherever it falls, rather than moving it somewhere with its own
+// collisions.
+// Below the date row, not in the name band. It previously sat at top:0 with an
+// opaque background, which did not resolve the collision — it just painted over
+// the milestone name underneath ("day 1 of 3" covering "Survey responses due").
+// Nothing occupies this band, so no masking is needed.
+.dash-today-label {
+  color: var(--dark);
+  font-family: var(--codeFont);
+  font-size: 0.6rem;
+  position: absolute;
+  top: 3.9rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 3;
+}
 
 .dash-legend {
   border-top: 1px solid var(--dash-line);
@@ -333,6 +394,13 @@
       border-left: 2px solid var(--dash-line);
       margin-left: 4.6rem;
       padding-left: 1rem;
+
+      // Single track here, not the two the wide layout uses. `time` becomes
+      // absolutely positioned below, which takes it out of grid flow — so with two
+      // tracks still declared, the text lands in the narrow 4.6rem *first* track
+      // and wraps mid-word ("Preparati/on" on a 375px screen, measured in a real
+      // build). Collapsing to one track gives the text the full row.
+      grid-template-columns: minmax(0, 1fr);
 
       time { left: -5.6rem; position: absolute; width: 4.6rem; }
     }

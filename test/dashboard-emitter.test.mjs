@@ -324,15 +324,25 @@ test("the facts-only fixture omits every assessed module but keeps the stated on
   assert.equal(html.includes("dash-rag--"), false)
 })
 
-test("the page declares collapsed chrome by default and offers a toggle", async () => {
+test("the page declares expanded chrome by default and offers a toggle", async () => {
   const dir = tmpDir("dash-chrome")
   const { html } = await emitTo(dir)
-  assert.match(html, /data-chrome="collapsed"/)
+  assert.match(html, /data-chrome="expanded"/)
   assert.match(html, /class="dash-chrome-toggle"/)
-  // Pressed=true means sidebars are shown. Chrome starts collapsed, so the
-  // toggle must start unpressed — a button reading pressed=true while the
-  // sidebars it controls are hidden would be lying about its own state.
-  assert.match(html, /aria-pressed="false"/)
+  // Pressed=true means sidebars are shown. Chrome starts expanded, so the toggle
+  // must start pressed — the two must agree, or the button lies about its own
+  // state to a screen reader.
+  assert.match(html, /aria-pressed="true"/)
+})
+
+test("the restore script looks for the non-default preference, not the default", async () => {
+  const dir = tmpDir("dash-chrome-restore-value")
+  const { html } = await emitTo(dir)
+  // The page is emitted expanded, so only a stored "collapsed" needs applying.
+  // Restoring the value the page already has would be a no-op that silently
+  // stopped working if the default were ever flipped again.
+  assert.match(html, /v==="collapsed"/)
+  assert.equal(html.includes('v==="expanded"'), false)
 })
 
 test("the toggle's onclick handler is syntactically valid JavaScript", async () => {

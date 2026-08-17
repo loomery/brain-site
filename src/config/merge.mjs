@@ -59,6 +59,17 @@ export function mergeConfig(base, override, rootDir) {
     merged.configuration.pageTitle = config.pageTitle
   }
 
+  // Absent by default (the shipped base config's own "localhost:8080" is a
+  // local-dev placeholder that made every deployed page's Explorer/search
+  // link to the wrong place — see quartz/components/renderPage.tsx's
+  // basePath computation and page-shell.ts's matching one). A brain sets
+  // this only when it actually deploys somewhere other than a domain root
+  // (a GitHub Pages project site, e.g. "user.github.io/repo") — `serve`
+  // ignores it either way, so local dev is unaffected regardless.
+  if (config.baseUrl !== undefined) {
+    merged.configuration.baseUrl = config.baseUrl
+  }
+
   const timeline = config.sections?.timeline
   for (const plugin of merged.plugins) {
     if (!plugin.source.includes(TIMELINE_PLUGIN)) continue

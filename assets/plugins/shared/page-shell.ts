@@ -360,6 +360,20 @@ export async function pageShell(
     .map(jsTag)
     .join("\n")
 
+  // Mirrors quartz/components/renderPage.tsx's own basePath computation
+  // exactly, so data-basepath agrees between real content pages (rendered by
+  // Quartz itself) and these hand-written pages (dashboard/onboarding/logs).
+  // Without this, a brain deployed under a path (a GitHub Pages project site
+  // with no custom domain, e.g. "user.github.io/repo") gets working Home/
+  // Onboarding links (computed relative, via pathToRoot) but a broken
+  // Explorer/search — both read document.body.dataset.basepath at runtime
+  // (see @quartz-community/explorer's own client script), and this was the
+  // one place in the whole render path that never set it.
+  const basePath =
+    ctx.argv.serve || !ctx.cfg?.configuration?.baseUrl
+      ? ""
+      : new URL(`https://${ctx.cfg.configuration.baseUrl}`).pathname.replace(/\/$/, "")
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -371,7 +385,7 @@ ${headCss}
 <script type="application/javascript" data-persist="true">const fetchData = fetch("/static/contentIndex.json").then(data => data.json())</script>
 ${beforeDomJs}
 </head>
-<body data-slug="${escapeHtml(slug)}">
+<body data-slug="${escapeHtml(slug)}" data-basepath="${escapeHtml(basePath)}">
 <div id="quartz-root" class="page" data-frame="default"${rootAttrs ? ` ${rootAttrs}` : ""}>
 <div id="quartz-body">
 <div class="left sidebar">${chrome.left}</div>

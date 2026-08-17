@@ -34,6 +34,11 @@ a brain to one release forever; a branch gives no reproducibility at all.)
 pageTitle: Acme Brain          # the site's title, in the header and <title>
 content: docs                  # the directory Quartz builds pages from
 static: assets/static          # optional: brain-owned images, served at /static/**
+baseUrl: user.github.io/acme-brain  # only set this if deployed under a path, not a
+                                # domain root (e.g. a GitHub Pages project site with
+                                # no custom domain) — omit entirely for a brain hosted
+                                # at its own root, and for local `serve`, which always
+                                # ignores it
 sections:
   timeline:
     source: logs               # defaults to logs/; omit `timeline` entirely to disable
@@ -45,6 +50,16 @@ invented key is a hard error rather than a silently ignored line. All paths are 
 to the repository root, where `brain-site.yaml` itself lives; `setup` resolves them before
 anything downstream sees them. There is currently **no** key for adding brain-local
 plugins, and none for enabling the `AudienceFilter`.
+
+`baseUrl` only affects two things: the `data-basepath` attribute every page's `<body>`
+carries (which the Explorer and search components read at runtime to build their own
+links — see `@quartz-community/explorer`'s client script) and, indirectly, whatever else
+real Quartz derives from its own `configuration.baseUrl`. It does **not** make static
+asset references (`<link>`/`<script>` `href`/`src`, CSS `url()`) path-relative — those
+stay root-absolute regardless, which only resolves correctly at a domain root. A brain
+deploying under a path still needs its own build step to rewrite those (a post-build
+text rewrite, or a reverse proxy that strips the path prefix) — `baseUrl` alone is not
+enough to fully support subpath hosting.
 
 Then, from the repository root:
 

@@ -8,7 +8,7 @@
 // plugin. Failing loudly as an unknown key beats accepting-and-discarding; a real
 // brain-local plugin hook is tracked as a follow-up.
 
-const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "static"])
+const TOP_LEVEL = new Set(["pageTitle", "content", "sections", "static", "baseUrl"])
 const SECTIONS = new Set(["timeline"])
 const TIMELINE = new Set(["source", "route"])
 
@@ -35,6 +35,7 @@ export function validateOverride(override) {
   checkStringField(config.pageTitle, "pageTitle", errors)
   checkStringField(config.content, "content", errors)
   checkStringField(config.static, "static", errors)
+  checkStringField(config.baseUrl, "baseUrl", errors)
 
   const sections = config.sections
   if (sections !== undefined) {

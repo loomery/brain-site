@@ -113,6 +113,41 @@
   }
 }
 
+// Expanded chrome, dashboard only: the right sidebar's Graph is a graph of
+// one page's own links, which is meaningless on a status/overview page — and,
+// once hidden, would otherwise leave a dead blank column, since the dashboard
+// also carries no table-of-contents (it isn't rendered from markdown
+// headings, so there are no headings to build one from). Reclaim that
+// column's width for the center content instead of just hiding the sidebar.
+//
+// Scoped by `data-chrome="expanded"` — the state page-shell's rootAttrs sets
+// by default for this emitter alone (dashboard-emitter.ts is the only caller
+// that passes it; see page-shell.ts) — so the user-toggled "collapsed" state
+// above (which already hides both sidebars) is untouched, and by
+// `:has(.dashboard)` so this can never fire on any other page even if the
+// attribute somehow appeared there.
+//
+// Mobile needs no equivalent: $mobileGrid stacks every area into one column,
+// so an empty `.right.sidebar` already collapses to zero height there on its
+// own. Desktop and tablet both give the right sidebar its own dedicated
+// $sidePanelWidth-wide grid column (see $desktopGrid/$tabletGrid in
+// variables.scss), so a plain `display: none` would leave that width still
+// reserved — the grid needs re-templating to a two-column layout, not just
+// the sidebar hiding.
+@media #{$desktop}, #{$tablet} {
+  #quartz-root[data-chrome="expanded"] {
+    & #quartz-body:has(.dashboard) {
+      grid-template-columns: #{$sidePanelWidth} auto;
+      grid-template-rows: auto auto auto;
+      grid-template-areas: "grid-sidebar-left grid-header" "grid-sidebar-left grid-center" "grid-sidebar-left grid-footer";
+
+      & > .right.sidebar {
+        display: none;
+      }
+    }
+  }
+}
+
 // White background with a coloured outline, not a grey wash: design feedback
 // was that dark-grey text on the previous --lightgray card background read as
 // grey-on-grey. --secondary resolves to indigo in light mode and mint in dark
@@ -425,17 +460,29 @@
   }
 }
 
-// Between mobile and desktop the names cannot fit; keep the dates and let the
-// bar scroll rather than overlapping labels.
+// Above mobile, keep the dates (and names, per the container query above) and
+// let the bar scroll rather than overlapping labels.
 // Deliberately no `.dash-node-name { display: none }` here. This block used to
 // hide names across the whole tablet viewport range as a proxy for "the bar is
 // too narrow", but viewport width is the wrong measure — the width actually
 // available depends on whether the page chrome is expanded. The container query
 // above decides it from the bar's own width instead, and this rule would simply
 // override it (a 933px bar on a 1020px viewport lost its names to this line).
-@media #{$tablet} {
+//
+// This used to be $tablet-only, which was a real defect: at desktop width
+// (>1200px, where the fisheye still renders — only $mobile turns it off, see
+// below) neither `overflow-x: auto` nor a `.dash-seg` minimum applied, so a
+// milestone list with more than ~6 entries (or any long name, e.g. "Sprint 1
+// review / Sprint 2 planning") packed its segments tight enough that
+// same-side alternating labels two apart (both "above" or both "below")
+// overlapped — verified via `getBoundingClientRect()` on `.dash-node-name` in
+// a real build, ~50px of horizontal overlap between two "above" labels.
+// 8rem is sized to that longest real label plus its date row, not guessed:
+// it's wide enough that even that label's own segment never forces its
+// same-side neighbours closer than the label text itself needs.
+@media #{$tablet}, #{$desktop} {
   .dash-fisheye { overflow-x: auto; }
-  .dash-seg { min-width: 4.5rem; }
+  .dash-seg { min-width: 8rem; }
 }
 
 // --- people, effort, activity ----------------------------------------------

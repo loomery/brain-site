@@ -71,6 +71,52 @@ function HomeLink({ fileData }: QuartzComponentProps) {
   )
 }
 
+// Same reasoning as HomeLink above, for the same structural reason: `/onboarding`
+// is emitted by OnboardingEmitter, never a parsed content file (see that file's
+// own banner on why it writes HTML by hand), so it can never appear as a node in
+// the Explorer's tree either, by any filterFn/mapFn tweak. Without a persistent
+// link, `/onboarding` — a real, working route — is reachable only by whatever URL
+// a brain's own docs happen to hand-link, which most won't think to do; two clicks
+// into a normal content page there would be no way back to it at all.
+//
+// Unconditional, not gated on whether the brain has any `roles`/`onboarding`
+// frontmatter yet: OnboardingEmitter always writes `/onboarding` regardless (an
+// empty role list just renders "Pick a role to see its onboarding path." with no
+// list items — harmless, never a 404), so there is no brain configuration this
+// link could point at a missing page for.
+//
+// href built the same way as HomeLink's: `pathToRoot(fileData.slug)` is "." for
+// any root-level page (including every donor page page-shell.ts's donor-chrome
+// mechanism can ever pick — see that file's own listDonorSlugs, non-recursive by
+// design) and "../" repeated once per segment for a real nested content page.
+// Appending "/onboarding" to that gives "./onboarding" at root (which page-shell's
+// toRootRelative turns into the portable "/onboarding") or "../onboarding" (etc.)
+// from a real nested page, which resolves correctly from that page's own actual
+// serving depth without page-shell's involvement at all.
+function OnboardingLink({ fileData }: QuartzComponentProps) {
+  return (
+    <a href={`${pathToRoot(fileData.slug)}/onboarding`} class="explorer-onboarding-link">
+      <svg
+        class="explorer-onboarding-icon"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M12 3 3 7.5 12 12l9-4.5L12 3ZM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      Onboarding
+    </a>
+  )
+}
+
 // Not a bare QuartzComponent: must stay a genuine `(opts) => QuartzComponent`
 // constructor, matching the real Explorer's own shape, and must NOT set
 // `.displayName` on itself — config-loader.ts's buildLayoutForEntries branches
@@ -87,6 +133,7 @@ const ExplorerWithHomeConstructor: QuartzComponentConstructor<Record<string, unk
   const Wrapped: QuartzComponent = (props: QuartzComponentProps) => (
     <>
       <HomeLink {...props} />
+      <OnboardingLink {...props} />
       <InnerExplorer {...props} />
     </>
   )
@@ -122,6 +169,29 @@ const ExplorerWithHomeCss = `
 }
 
 .explorer-home-icon {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+}
+
+.explorer-onboarding-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  padding: 0.15rem 0;
+  color: var(--dark);
+  font-family: var(--headerFont);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.explorer-onboarding-link:hover {
+  color: var(--tertiary);
+}
+
+.explorer-onboarding-icon {
   flex: 0 0 auto;
   width: 1rem;
   height: 1rem;

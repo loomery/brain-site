@@ -128,3 +128,26 @@ ul.toc-content.overflow > li {
     margin-top: 0;
   }
 }
+
+// page-shell.ts (shared by dashboard-emitter, onboarding-emitter and
+// logs-timeline-emitter) unconditionally emits `<hr><div class="page-footer">
+// </div>` after every hand-written page's body, as a layout-consistency stub
+// matching the `.page-header`/`.page-footer` structure a real
+// @quartz-community/content-page gets — but none of these three emitters
+// ever populates page-footer with real content (that only happens for actual
+// content pages, via @quartz-community/footer), so the div is always empty
+// and the `<hr>` above it always sits alone, leaving a visible blank strip at
+// the bottom of every dashboard, onboarding and logs page.
+//
+// CSS-only fix rather than populating the stub: there's nothing brain-site
+// itself would say in an emitted page's footer that isn't already said by
+// the real page-footer a content page gets, so filling it in would mean
+// either duplicating that footer's config here or making these emitters
+// route through it — a bigger change than an always-empty div calls for.
+// `:has()` is supported by every browser this project targets (Chrome 105+,
+// Safari 15.4+, Firefox 121+; esbuild-sass-plugin passes it through
+// untouched, there is no autoprefixing step to worry about), so collapse the
+// div and the `<hr>` immediately before it whenever the div is empty. A real
+// content page's page-footer is never empty, so this never touches one.
+.page-footer:empty { display: none; }
+hr:has(+ .page-footer:empty) { display: none; }

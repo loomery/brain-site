@@ -324,60 +324,18 @@ test("the facts-only fixture omits every assessed module but keeps the stated on
   assert.equal(html.includes("dash-rag--"), false)
 })
 
-test("the page declares expanded chrome by default and offers a toggle", async () => {
+test("chrome is always expanded, with no toggle to collapse it", async () => {
   const dir = tmpDir("dash-chrome")
   const { html } = await emitTo(dir)
+  // Removed per user feedback: a reader-toggleable, localStorage-persisted
+  // collapse could leave the sidebar silently blank on a later visit with no
+  // visible way to tell why. data-chrome="expanded" stays a static marker —
+  // other CSS (the graph-hiding and right-sidebar-reclaim rules) is scoped
+  // off it — but nothing anywhere can ever change it to "collapsed" now.
   assert.match(html, /data-chrome="expanded"/)
-  assert.match(html, /class="dash-chrome-toggle"/)
-  // Pressed=true means sidebars are shown. Chrome starts expanded, so the toggle
-  // must start pressed — the two must agree, or the button lies about its own
-  // state to a screen reader.
-  assert.match(html, /aria-pressed="true"/)
-})
-
-test("the restore script looks for the non-default preference, not the default", async () => {
-  const dir = tmpDir("dash-chrome-restore-value")
-  const { html } = await emitTo(dir)
-  // The page is emitted expanded, so only a stored "collapsed" needs applying.
-  // Restoring the value the page already has would be a no-op that silently
-  // stopped working if the default were ever flipped again.
-  assert.match(html, /v==="collapsed"/)
-  assert.equal(html.includes('v==="expanded"'), false)
-})
-
-test("the toggle's onclick handler is syntactically valid JavaScript", async () => {
-  const dir = tmpDir("dash-chrome-onclick")
-  const { html } = await emitTo(dir)
-  const match = html.match(/onclick="([^"]*)"/)
-  assert.notEqual(match, null, "expected an onclick attribute on the toggle button")
-  const handlerSource = match[1]
-  // A truncated attribute (e.g. from an unescaped embedded double quote) either
-  // throws a SyntaxError here or silently drops the tail of the handler — the
-  // trailing-call check below catches the latter.
-  assert.doesNotThrow(() => new Function(handlerSource))
-  assert.equal(handlerSource.endsWith("(this)"), true, `handler was truncated: ${handlerSource}`)
-})
-
-test("the chrome-sync script appears after the toggle button", async () => {
-  const dir = tmpDir("dash-chrome-sync-order")
-  const { html } = await emitTo(dir)
-  const buttonCloseAt = html.indexOf("</button>")
-  assert.notEqual(buttonCloseAt, -1, "expected the toggle button to render")
-  // The sync script must reference the toggle (to find and update it), and that
-  // reference can only appear once the button itself has already closed — it
-  // cannot run before the button exists in the DOM.
-  const syncRefAt = html.indexOf("dash-chrome-toggle", buttonCloseAt)
-  assert.notEqual(syncRefAt, -1, "expected the sync script to reference the toggle after the button closes")
-})
-
-test("the chrome preference is restored from localStorage before paint", async () => {
-  const dir = tmpDir("dash-chrome-restore")
-  const { html } = await emitTo(dir)
-  assert.match(html, /localStorage/)
-  assert.match(html, /brain-site-chrome/)
-  // Must run inline in the body, not deferred: a class applied after paint
-  // produces a visible layout jump.
-  assert.equal(html.indexOf("brain-site-chrome") < html.indexOf('class="dashboard"'), true)
+  assert.equal(html.includes("dash-chrome-toggle"), false)
+  assert.equal(html.includes("brain-site-chrome"), false)
+  assert.equal(html.includes("localStorage"), false)
 })
 
 test("the hero header always carries the Loomery logomark", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@loomery/brain-site",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "type": "module",
   "description": "Shared Quartz frontend for Loomery project brains. Ships the skin; the brain owns its content and file structure.",
   "bin": {

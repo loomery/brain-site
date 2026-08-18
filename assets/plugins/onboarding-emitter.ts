@@ -145,19 +145,19 @@ function mermaidSafe(s: string): string {
 // Mermaid source + role switcher + ordered list, as HTML fragments.
 // ---------------------------------------------------------------------------
 
-function roleSwitcherHtml(roles: string[], current: string | undefined): string {
-  const parts = [`<a href="/onboarding">All roles</a>`]
+function roleSwitcherHtml(roles: string[], current: string | undefined, basePath: string): string {
+  const parts = [`<a href="${basePath}/onboarding">All roles</a>`]
   for (const role of roles) {
     parts.push(
       role === current
         ? `<strong>${escapeHtml(humanize(role))}</strong>`
-        : `<a href="/onboarding/${role}">${escapeHtml(humanize(role))}</a>`,
+        : `<a href="${basePath}/onboarding/${role}">${escapeHtml(humanize(role))}</a>`,
     )
   }
   return `<p><strong>Onboarding paths:</strong> ${parts.join(" &middot; ")}</p>`
 }
 
-function mermaidSource(nodes: PathNode[]): string {
+function mermaidSource(nodes: PathNode[], basePath: string): string {
   const ids = new Map<string, string>()
   for (const n of nodes) ids.set(n.slug, mermaidId(n.slug))
 
@@ -185,7 +185,7 @@ function mermaidSource(nodes: PathNode[]): string {
   for (const n of nodes) {
     const id = ids.get(n.slug)!
     const tooltip = mermaidSafe(n.summary || n.title)
-    lines.push(`  click ${id} "/${n.slug}" "${tooltip}"`)
+    lines.push(`  click ${id} "${basePath}/${n.slug}" "${tooltip}"`)
   }
   return lines.join("\n")
 }
@@ -193,13 +193,13 @@ function mermaidSource(nodes: PathNode[]): string {
 // Mandatory, not decorative: the fallback if `click` is inert, the
 // keyboard/screen-reader path (Mermaid nodes are not focusable controls), and
 // it works without JS.
-function orderedListHtml(nodes: PathNode[]): string {
+function orderedListHtml(nodes: PathNode[], basePath: string): string {
   const items = nodes
     .map((n) => {
       const est = n.estimate ? ` — ${escapeHtml(n.estimate)}` : ""
       const summary = n.summary ? ` — ${escapeHtml(n.summary)}` : ""
       const contextNote = n.isContext ? ` <em>(context, from another role)</em>` : ""
-      return `<li><a href="/${n.slug}">${escapeHtml(humanize(n.title))}</a>${est}${summary}${contextNote}</li>`
+      return `<li><a href="${basePath}/${n.slug}">${escapeHtml(humanize(n.title))}</a>${est}${summary}${contextNote}</li>`
     })
     .join("\n")
   return `<h2>Path</h2>\n<ol>\n${items}\n</ol>`
@@ -233,7 +233,7 @@ const MERMAID_EXPAND_BUTTON =
 const MERMAID_CONTAINER =
   '<div id="mermaid-container" role="dialog"><div id="mermaid-space"><div class="mermaid-content"></div></div></div>'
 
-function rolePathSection(role: string, docs: OnboardingDoc[]): string {
+function rolePathSection(role: string, docs: OnboardingDoc[], basePath: string): string {
   try {
     // buildRolePath throws `Error("cycle detected: ...")` on a cyclic graph — a
     // build error, not a render-time surprise. Catch it here instead of
@@ -243,8 +243,8 @@ function rolePathSection(role: string, docs: OnboardingDoc[]): string {
       return "<p>No onboarding docs are tagged for this role yet.</p>"
     }
     return [
-      `<pre>${MERMAID_EXPAND_BUTTON}<code class="mermaid">${escapeHtml(mermaidSource(nodes))}</code>${MERMAID_CONTAINER}</pre>`,
-      orderedListHtml(nodes),
+      `<pre>${MERMAID_EXPAND_BUTTON}<code class="mermaid">${escapeHtml(mermaidSource(nodes, basePath))}</code>${MERMAID_CONTAINER}</pre>`,
+      orderedListHtml(nodes, basePath),
     ].join("\n")
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -271,6 +271,19 @@ export const OnboardingEmitter: QuartzEmitterPlugin<Record<string, never>> = () 
     const docs = adaptDocs(content as QuartzContent[])
     const roles = listRoles(docs)
 
+    // Mirrors page-shell.ts's own basePath computation exactly (itself mirroring
+    // quartz/components/renderPage.tsx). This emitter bakes hrefs as static text
+    // at build time — the role-switcher links, the ordered-list fallback, and
+    // critically the Mermaid `click NodeId "/slug" "tooltip"` directive, which
+    // is plain text inside a ```mermaid code block, not an HTML attribute, so a
+    // post-build text rewrite keyed on href=/src=/url()/fetch( can never reach
+    // it. Getting the prefix right here, once, at the source, is the only fix
+    // that actually works for the Mermaid case.
+    const basePath =
+      ctx.argv.serve || !ctx.cfg?.configuration?.baseUrl
+        ? ""
+        : new URL(`https://${ctx.cfg.configuration.baseUrl}`).pathname.replace(/\/$/, "")
+
     const fps: FilePath[] = []
 
     const indexBody = [
@@ -285,7 +298,7 @@ export const OnboardingEmitter: QuartzEmitterPlugin<Record<string, never>> = () 
           } catch {
             count = 0
           }
-          return `<li><a href="/onboarding/${role}">${escapeHtml(humanize(role))}</a> — ${count} doc${
+          return `<li><a href="${basePath}/onboarding/${role}">${escapeHtml(humanize(role))}</a> — ${count} doc${
             count === 1 ? "" : "s"
           }</li>`
         })
@@ -297,8 +310,8 @@ export const OnboardingEmitter: QuartzEmitterPlugin<Record<string, never>> = () 
     for (const role of roles) {
       const body = [
         `<h1>Onboarding: ${escapeHtml(humanize(role))}</h1>`,
-        roleSwitcherHtml(roles, role),
-        rolePathSection(role, docs),
+        roleSwitcherHtml(roles, role, basePath),
+        rolePathSection(role, docs, basePath),
       ].join("\n")
       fps.push(
         await emitPage(
